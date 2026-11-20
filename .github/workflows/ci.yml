@@ -48,6 +48,12 @@ jobs:
       - run: make integration
       - name: Exercise a bounded burst against the local synthetic provider
         run: make burst RESULTS=.local/ci LOAD_FLAGS="-total 300 -batch 100"
+      - name: Verify standalone preference and batch progress under contention
+        env:
+          BATCH_SHARE_PERCENT: "20"
+        run: |
+          docker compose up -d --no-deps --scale worker=3 worker
+          python3 scripts/ingress-share.py --share 20 --profiles saturated --out .local/ci/ingress-share.json
       - name: Save Compose service state
         if: always()
         run: |
