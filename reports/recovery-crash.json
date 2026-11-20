@@ -1,0 +1,26 @@
+{
+  "startedAt": "2026-11-20T19:38:08.127792+00:00",
+  "cases": [
+    {
+      "case": "worker process dies after provider accepts",
+      "crashedWorkers": 2,
+      "observedBeforeKill": "sending",
+      "abandonedStatus": "unknown",
+      "sameRecipientSubsequentStatus": "accepted",
+      "totalProviderPOSTs": 2,
+      "result": "pass",
+      "elapsedSeconds": 124.852
+    },
+    {
+      "case": "idempotent provider replays the first receipt",
+      "providerPOSTs": 2,
+      "providerAcceptances": 1,
+      "deduplicated": 1,
+      "apiState": "accepted",
+      "result": "pass",
+      "elapsedSeconds": 7.687
+    }
+  ],
+  "environment": "isolated local Docker Compose project, synthetic provider, 2 worker replicas",
+  "result": "pass"
+}

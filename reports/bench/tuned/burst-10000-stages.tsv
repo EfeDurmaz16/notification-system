@@ -1,0 +1,13 @@
+priority	stage	batches	notifications	accepted_at_query	samples	p50_ms	p95_ms	p99_ms
+all	1_pending_to_sending	10	10000	10000	10000	55374.99	111302.12	116471.42
+all	2_sending_to_accepted	10	10000	10000	10000	22.86	26.16	41.65
+all	3_pending_to_accepted	10	10000	10000	10000	55397.20	111324.56	116496.34
+high	1_pending_to_sending	10	3334	3334	3334	33521.87	63902.34	67884.74
+high	2_sending_to_accepted	10	3334	3334	3334	22.74	24.97	27.06
+high	3_pending_to_accepted	10	3334	3334	3334	33544.44	63924.67	67907.06
+low	1_pending_to_sending	10	3333	3333	3333	95476.92	115703.54	117264.24
+low	2_sending_to_accepted	10	3333	3333	3333	22.99	27.14	75.46
+low	3_pending_to_accepted	10	3333	3333	3333	95508.72	115726.84	117288.02
+normal	1_pending_to_sending	10	3333	3333	3333	58950.40	90978.96	94062.68
+normal	2_sending_to_accepted	10	3333	3333	3333	22.83	26.38	67.87
+normal	3_pending_to_accepted	10	3333	3333	3333	58974.55	91001.80	94085.38

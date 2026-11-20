@@ -1,0 +1,6 @@
+=== RUN   TestCancellationWinsZeroProviderPOSTs
+    engine_test.go:58: provider POST count = 1, want 0 after cancellation
+--- FAIL: TestCancellationWinsZeroProviderPOSTs (0.00s)
+FAIL
+FAIL	command-line-arguments	0.150s
+FAIL

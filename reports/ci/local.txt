@@ -1,0 +1,226 @@
+go vet ./...
+go test -count=1 ./...
+ok  	github.com/EfeDurmaz16/notification-system/cmd/loadtest	0.236s
+ok  	github.com/EfeDurmaz16/notification-system/cmd/notify	0.356s
+ok  	github.com/EfeDurmaz16/notification-system/cmd/provider	0.225s
+ok  	github.com/EfeDurmaz16/notification-system/internal/api	0.474s
+ok  	github.com/EfeDurmaz16/notification-system/internal/delivery	0.270s
+ok  	github.com/EfeDurmaz16/notification-system/internal/observability	0.267s
+ok  	github.com/EfeDurmaz16/notification-system/internal/store	0.290s
+ok  	github.com/EfeDurmaz16/notification-system/internal/stream	0.744s
+ok  	github.com/EfeDurmaz16/notification-system/tests/integration	0.216s
+ok  	github.com/EfeDurmaz16/notification-system/tests/webhook	0.257s
+go test -race -count=1 ./...
+ok  	github.com/EfeDurmaz16/notification-system/cmd/loadtest	1.147s
+ok  	github.com/EfeDurmaz16/notification-system/cmd/notify	1.406s
+ok  	github.com/EfeDurmaz16/notification-system/cmd/provider	1.160s
+ok  	github.com/EfeDurmaz16/notification-system/internal/api	1.592s
+ok  	github.com/EfeDurmaz16/notification-system/internal/delivery	1.298s
+ok  	github.com/EfeDurmaz16/notification-system/internal/observability	1.298s
+ok  	github.com/EfeDurmaz16/notification-system/internal/store	1.310s
+ok  	github.com/EfeDurmaz16/notification-system/internal/stream	1.795s
+ok  	github.com/EfeDurmaz16/notification-system/tests/integration	1.231s
+ok  	github.com/EfeDurmaz16/notification-system/tests/webhook	1.280s
+mkdir -p bin
+go build -trimpath -o bin/ ./cmd/...
+./scripts/validate-openapi.sh
+PROVIDER_URL=http://provider:8081/send PROVIDER_IDEMPOTENT=false docker compose up --build -d --wait --wait-timeout 300
+ Image notification-system:local Building
+#1 [internal] load local bake definitions
+#1 reading from stdin 548B done
+#1 DONE 0.0s
+
+#2 [internal] load build definition from Dockerfile
+#2 transferring dockerfile: 531B done
+#2 DONE 0.0s
+
+#3 resolve image config for docker-image://docker.io/docker/dockerfile:1
+#3 DONE 0.8s
+
+#4 docker-image://docker.io/docker/dockerfile:1@sha256:572cebbc2b15e6f84c077742952674889cb63cd5e9b80abdffcbe587b6f19183
+#4 resolve docker.io/docker/dockerfile:1@sha256:572cebbc2b15e6f84c077742952674889cb63cd5e9b80abdffcbe587b6f19183 0.0s done
+#4 CACHED
+
+#5 [internal] load metadata for docker.io/library/golang:1.26.4-alpine
+#5 DONE 0.6s
+
+#6 [internal] load metadata for docker.io/library/alpine:3.22
+#6 DONE 0.7s
+
+#7 [internal] load .dockerignore
+#7 transferring context: 115B done
+#7 DONE 0.0s
+
+#8 [internal] load build context
+#8 DONE 0.0s
+
+#9 [stage-2 1/4] FROM docker.io/library/alpine:3.22@sha256:49340b346798875b5592e5d420241f2f9cfba5f47e62ebb1446a1b34734e898f
+#9 resolve docker.io/library/alpine:3.22@sha256:49340b346798875b5592e5d420241f2f9cfba5f47e62ebb1446a1b34734e898f 0.0s done
+#9 DONE 0.0s
+
+#10 [deps 1/4] FROM docker.io/library/golang:1.26.4-alpine@sha256:3ad57304ad93bbec8548a0437ad9e06a455660655d9af011d58b993f6f615648
+#10 resolve docker.io/library/golang:1.26.4-alpine@sha256:3ad57304ad93bbec8548a0437ad9e06a455660655d9af011d58b993f6f615648
+#10 resolve docker.io/library/golang:1.26.4-alpine@sha256:3ad57304ad93bbec8548a0437ad9e06a455660655d9af011d58b993f6f615648 0.0s done
+#10 DONE 0.0s
+
+#8 [internal] load build context
+#8 transferring context: 80.71kB done
+#8 DONE 0.0s
+
+#11 [deps 2/4] WORKDIR /src
+#11 CACHED
+
+#12 [deps 3/4] COPY go.mod go.sum ./
+#12 CACHED
+
+#13 [deps 4/4] RUN --mount=type=cache,target=/go/pkg/mod go mod download
+#13 CACHED
+
+#14 [build 1/2] COPY . .
+#14 DONE 0.0s
+
+#15 [build 2/2] RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build     CGO_ENABLED=0 go build -trimpath -o /out/ ./cmd/notify ./cmd/provider
+#15 DONE 1.2s
+
+#16 [stage-2 2/4] RUN apk add --no-cache ca-certificates
+#16 CACHED
+
+#17 [stage-2 3/4] WORKDIR /app
+#17 CACHED
+
+#18 [stage-2 4/4] COPY --from=build /out/ ./
+#18 DONE 0.0s
+
+#19 exporting to image
+#19 exporting layers
+#19 exporting layers 0.8s done
+#19 exporting manifest sha256:87104fdea6ebd222e2c05dc6f2eabd0a47246679c62ae864e3c98ed8b51bd86e 0.0s done
+#19 exporting config sha256:a8477e952fb70877460164612f15a223f920fd2416402601cca547652bd983ff 0.0s done
+#19 exporting attestation manifest sha256:3caf03d9b3c4b4fdc5a53e4e9e4cd2e6d9ca2e56ae220a95ccfcc27340c4ddee 0.0s done
+#19 exporting manifest list sha256:b7b572836ee92c65d4532e8051dd0169ced14d227ecdcdb37f3e6b748244890e done
+#19 naming to docker.io/library/notification-system:local done
+#19 unpacking to docker.io/library/notification-system:local 0.1s done
+#19 DONE 1.0s
+
+#20 resolving provenance for metadata file
+#20 DONE 0.0s
+ Image notification-system:local Built
+ Container notification-system-redis-1 Running
+ Container notification-system-postgres-1 Running
+ Container notification-system-kafka-1 Running
+ Container notification-system-provider-1 Recreate
+ Container notification-system-api-1 Recreate
+ Container notification-system-connect-1 Running
+ Container notification-system-provider-1 Recreated
+ Container notification-system-api-1 Recreated
+ Container notification-system-worker-2 Recreate
+ Container notification-system-worker-1 Stopping
+ Container notification-system-worker-3 Stopping
+ Container notification-system-worker-1 Stopped
+ Container notification-system-worker-1 Removing
+ Container notification-system-worker-1 Removed
+ Container notification-system-worker-3 Stopped
+ Container notification-system-worker-3 Removing
+ Container notification-system-worker-3 Removed
+ Container notification-system-worker-2 Recreated
+ Container notification-system-kafka-1 Waiting
+ Container notification-system-postgres-1 Waiting
+ Container notification-system-provider-1 Starting
+ Container notification-system-provider-1 Started
+ Container notification-system-kafka-1 Healthy
+ Container notification-system-topics-1 Starting
+ Container notification-system-postgres-1 Healthy
+ Container notification-system-api-1 Starting
+ Container notification-system-api-1 Started
+ Container notification-system-topics-1 Started
+ Container notification-system-topics-1 Waiting
+ Container notification-system-topics-1 Exited
+ Container notification-system-connect-1 Waiting
+ Container notification-system-api-1 Waiting
+ Container notification-system-connect-1 Healthy
+ Container notification-system-api-1 Healthy
+ Container notification-system-connector-init-1 Starting
+ Container notification-system-connector-init-1 Started
+ Container notification-system-connector-init-1 Waiting
+ Container notification-system-redis-1 Waiting
+ Container notification-system-provider-1 Waiting
+ Container notification-system-redis-1 Healthy
+ Container notification-system-provider-1 Healthy
+ Container notification-system-connector-init-1 Exited
+ Container notification-system-worker-2 Starting
+ Container notification-system-worker-2 Started
+ Container notification-system-connector-init-1 Waiting
+ Container notification-system-topics-1 Waiting
+ Container notification-system-postgres-1 Waiting
+ Container notification-system-api-1 Waiting
+ Container notification-system-provider-1 Waiting
+ Container notification-system-redis-1 Waiting
+ Container notification-system-worker-2 Waiting
+ Container notification-system-connect-1 Waiting
+ Container notification-system-kafka-1 Waiting
+ Container notification-system-api-1 Healthy
+ Container notification-system-kafka-1 Healthy
+ Container notification-system-provider-1 Healthy
+ Container notification-system-worker-2 Healthy
+ Container notification-system-postgres-1 Healthy
+ Container notification-system-topics-1 Exited
+ Container notification-system-connector-init-1 Exited
+ Container notification-system-connect-1 Healthy
+ Container notification-system-redis-1 Healthy
+TEST_DATABASE_URL="postgres://notify:notify@127.0.0.1:54329/notify?sslmode=disable" go test -race -count=1 -v ./internal/store
+=== RUN   TestConcurrentCreateReplay
+--- PASS: TestConcurrentCreateReplay (0.07s)
+=== RUN   TestCancelSendRace
+--- PASS: TestCancelSendRace (0.15s)
+=== RUN   TestGenerationFenceAndScheduledSend
+--- PASS: TestGenerationFenceAndScheduledSend (0.04s)
+=== RUN   TestStaleRecoveryHonorsProviderContract
+=== RUN   TestStaleRecoveryHonorsProviderContract/no_guarantee
+=== RUN   TestStaleRecoveryHonorsProviderContract/active_guarantee
+=== RUN   TestStaleRecoveryHonorsProviderContract/expired_guarantee
+=== RUN   TestStaleRecoveryHonorsProviderContract/exhausted
+--- PASS: TestStaleRecoveryHonorsProviderContract (0.05s)
+    --- PASS: TestStaleRecoveryHonorsProviderContract/no_guarantee (0.01s)
+    --- PASS: TestStaleRecoveryHonorsProviderContract/active_guarantee (0.00s)
+    --- PASS: TestStaleRecoveryHonorsProviderContract/expired_guarantee (0.00s)
+    --- PASS: TestStaleRecoveryHonorsProviderContract/exhausted (0.00s)
+=== RUN   TestAtomicRollbackOnStoreFailure
+--- PASS: TestAtomicRollbackOnStoreFailure (0.03s)
+PASS
+ok  	github.com/EfeDurmaz16/notification-system/internal/store	1.587s
+TEST_KAFKA_BROKER="127.0.0.1:19092" TEST_REDIS_ADDR="127.0.0.1:16379" go test -race -count=1 -v ./internal/stream
+=== RUN   TestDecodeReadyEvent
+--- PASS: TestDecodeReadyEvent (0.00s)
+=== RUN   TestWeightedDispatch
+=== RUN   TestWeightedDispatch/all_saturated
+=== RUN   TestWeightedDispatch/unused_capacity
+=== RUN   TestWeightedDispatch/only_low
+--- PASS: TestWeightedDispatch (0.00s)
+    --- PASS: TestWeightedDispatch/all_saturated (0.00s)
+    --- PASS: TestWeightedDispatch/unused_capacity (0.00s)
+    --- PASS: TestWeightedDispatch/only_low (0.00s)
+=== RUN   TestStaleEventCannotDispatch
+--- PASS: TestStaleEventCannotDispatch (0.00s)
+=== RUN   TestQuotaBackendFailureBlocksSend
+redis: 2026/11/20 22:42:37 pool.go:770: redis: connection pool: failed to dial after 5 attempts: dial tcp 127.0.0.1:0: connect: can't assign requested address
+--- PASS: TestQuotaBackendFailureBlocksSend (0.41s)
+=== RUN   TestRedisRollingLimitAcrossReplicas
+    worker_test.go:146: replicas=2 dispatches=140 maximum_observed_in_rolling_second=87 elapsed=1.640513625s
+--- PASS: TestRedisRollingLimitAcrossReplicas (1.66s)
+=== RUN   TestKafkaRedeliveryAfterFailedBatch
+    worker_test.go:260: lower offset failure replays offsets 0 and 1; after durable success the next member resumes at offset 2
+--- PASS: TestKafkaRedeliveryAfterFailedBatch (0.19s)
+PASS
+ok  	github.com/EfeDurmaz16/notification-system/internal/stream	3.591s
+/Applications/Xcode.app/Contents/Developer/usr/bin/make smoke contract
+API_URL="http://127.0.0.1:18080" MOCK_PROVIDER_URL="http://127.0.0.1:8090" RUN_SMOKE=1 go test -run '^TestWorkflow$' -v -count=1 -timeout=2m ./tests/integration
+=== RUN   TestWorkflow
+    workflow_test.go:44: checking API and synthetic provider readiness
+    workflow_test.go:83: verified scheduled template, idempotent replay, conflict and WebSocket cancellation
+    workflow_test.go:102: verified partial batch, replay and end-to-end provider acceptance
+    workflow_test.go:116: verified zero actual POSTs for cancelled ID and exactly one for replayed accepted ID
+--- PASS: TestWorkflow (9.01s)
+PASS
+ok  	github.com/EfeDurmaz16/notification-system/tests/integration	9.154s
+python3 scripts/check-contract.py --url "http://127.0.0.1:18080"
+10 live JSON responses matched the documented schemas; cancellation returned 204.

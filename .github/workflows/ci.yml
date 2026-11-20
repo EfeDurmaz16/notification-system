@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  go:
+    name: Unit, race and build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version-file: go.mod
+      - run: make check openapi
+      - name: Verify module checksums
+        run: go mod verify
+      - name: Isolated benchmarks
+        run: make performance RESULTS=.local/ci
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: microbenchmarks
+          path: .local/ci/bench.txt
+          if-no-files-found: error
+          include-hidden-files: true
+
+  integration:
+    name: PostgreSQL, Kafka CDC, Redis and HTTP provider
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version-file: go.mod
+      - run: make integration
+      - name: Exercise a bounded burst against the local synthetic provider
+        run: make burst RESULTS=.local/ci LOAD_FLAGS="-total 300 -batch 100"
+      - name: Save Compose service state
+        if: always()
+        run: |
+          mkdir -p .local/ci
+          docker compose ps -a > .local/ci/services.txt
+          docker compose logs --no-color --tail=150 > .local/ci/compose.log
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: integration-evidence
+          path: .local/ci/
+          if-no-files-found: error
+          include-hidden-files: true
+      - if: always()
+        run: docker compose down -v

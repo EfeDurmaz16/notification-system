@@ -1,0 +1,25 @@
+go vet ./...
+go test -count=1 ./...
+ok  	github.com/EfeDurmaz16/notification-system/cmd/loadtest	0.247s
+ok  	github.com/EfeDurmaz16/notification-system/cmd/notify	0.354s
+ok  	github.com/EfeDurmaz16/notification-system/cmd/provider	0.141s
+ok  	github.com/EfeDurmaz16/notification-system/internal/api	0.464s
+ok  	github.com/EfeDurmaz16/notification-system/internal/delivery	0.191s
+ok  	github.com/EfeDurmaz16/notification-system/internal/observability	0.189s
+ok  	github.com/EfeDurmaz16/notification-system/internal/store	0.201s
+ok  	github.com/EfeDurmaz16/notification-system/internal/stream	0.750s
+ok  	github.com/EfeDurmaz16/notification-system/tests/integration	0.133s
+ok  	github.com/EfeDurmaz16/notification-system/tests/webhook	0.178s
+go test -race -count=1 ./...
+ok  	github.com/EfeDurmaz16/notification-system/cmd/loadtest	1.267s
+ok  	github.com/EfeDurmaz16/notification-system/cmd/notify	1.405s
+ok  	github.com/EfeDurmaz16/notification-system/cmd/provider	1.147s
+ok  	github.com/EfeDurmaz16/notification-system/internal/api	1.595s
+ok  	github.com/EfeDurmaz16/notification-system/internal/delivery	1.207s
+ok  	github.com/EfeDurmaz16/notification-system/internal/observability	1.205s
+ok  	github.com/EfeDurmaz16/notification-system/internal/store	1.218s
+ok  	github.com/EfeDurmaz16/notification-system/internal/stream	1.685s
+ok  	github.com/EfeDurmaz16/notification-system/tests/integration	1.119s
+ok  	github.com/EfeDurmaz16/notification-system/tests/webhook	1.172s
+mkdir -p bin
+go build -trimpath -o bin/ ./cmd/...
