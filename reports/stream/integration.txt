@@ -1,0 +1,22 @@
+=== RUN   TestDecodeReadyEvent
+--- PASS: TestDecodeReadyEvent (0.00s)
+=== RUN   TestWeightedDispatch
+=== RUN   TestWeightedDispatch/all_saturated
+=== RUN   TestWeightedDispatch/unused_capacity
+=== RUN   TestWeightedDispatch/only_low
+--- PASS: TestWeightedDispatch (0.00s)
+    --- PASS: TestWeightedDispatch/all_saturated (0.00s)
+    --- PASS: TestWeightedDispatch/unused_capacity (0.00s)
+    --- PASS: TestWeightedDispatch/only_low (0.00s)
+=== RUN   TestStaleEventCannotDispatch
+--- PASS: TestStaleEventCannotDispatch (0.00s)
+=== RUN   TestQuotaBackendFailureBlocksSend
+redis: 2026/11/20 22:38:07 pool.go:770: redis: connection pool: failed to dial after 5 attempts: dial tcp 127.0.0.1:0: connect: can't assign requested address
+--- PASS: TestQuotaBackendFailureBlocksSend (0.41s)
+=== RUN   TestRedisRollingLimitAcrossReplicas
+    worker_test.go:146: replicas=2 dispatches=140 maximum_observed_in_rolling_second=91 elapsed=1.587632875s
+--- PASS: TestRedisRollingLimitAcrossReplicas (1.60s)
+=== RUN   TestKafkaRedeliveryAfterFailedBatch
+    worker_test.go:260: lower offset failure replays offsets 0 and 1; after durable success the next member resumes at offset 2
+--- PASS: TestKafkaRedeliveryAfterFailedBatch (0.21s)
+PASS
