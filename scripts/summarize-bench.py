@@ -59,3 +59,13 @@ for path, data in reports:
     cells = [f"{values[p]['p95Ms']:.1f}" if p in values else "unavailable"
              for p in ["high", "normal", "low"]]
     print(f"| {path.stem} | {backlog} | {' | '.join(cells)} |")
+
+for path, data in reports:
+    if data["config"]["scenario"] != "mixed":
+        continue
+    print("\n## Independent channel quotas\n")
+    print("Three-channel burst across independent budgets, with each priority represented on each channel.\n")
+    print("| Channel | Requests received | Peak requests in a sliding second |")
+    print("| --- | ---: | ---: |")
+    for channel, stats in sorted(data["provider"]["channels"].items()):
+        print(f"| {channel} | {stats['attempts']} | {stats['peakPerSecond']} |")

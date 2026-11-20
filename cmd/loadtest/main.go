@@ -31,6 +31,7 @@ type config struct {
 	Poll        time.Duration `json:"pollIntervalNs"`
 	Deadline    time.Duration `json:"deadlineNs"`
 	Label       string        `json:"label,omitempty"`
+	Audit       bool          `json:"auditReceipts,omitempty"`
 }
 type latency struct {
 	N   int     `json:"n"`
@@ -94,7 +95,65 @@ type result struct {
 	Provider          fixtureStats       `json:"provider"`
 	Timeline          []sample           `json:"timeline"`
 	Checks            map[string]bool    `json:"checks"`
+	Receipts          *receiptAudit      `json:"receiptAudit,omitempty"`
 }
+
+type receiptAudit struct {
+	Checked    int `json:"checked"`
+	Missing    int `json:"zeroPosts"`
+	Repeated   int `json:"multiplePosts"`
+	ReadErrors int `json:"readErrors"`
+}
+
+// Audit each logical ID only after timings and aggregate counters have been
+// collected. The fixture indexes the actual X-Notification-ID on each POST.
+func (h *harness) audit(ctx context.Context) receiptAudit {
+	type verdict struct {
+		attempts int
+		err      error
+	}
+	ids := make(chan string)
+	observed := make(chan verdict)
+	var workers sync.WaitGroup
+	for range 8 {
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			for id := range ids {
+				var r struct {
+					Attempts int `json:"attempts"`
+				}
+				_, err := h.request(ctx, "GET", h.r.Config.Provider+"/stats/"+url.PathEscape(id), nil, "", &r)
+				observed <- verdict{r.Attempts, err}
+			}
+		}()
+	}
+	go func() {
+		defer close(ids)
+		for id := range h.seen {
+			select {
+			case <-ctx.Done():
+				return
+			case ids <- id:
+			}
+		}
+	}()
+	go func() { workers.Wait(); close(observed) }()
+	var audit receiptAudit
+	for v := range observed {
+		audit.Checked++
+		switch {
+		case v.err != nil:
+			audit.ReadErrors++
+		case v.attempts == 0:
+			audit.Missing++
+		case v.attempts > 1:
+			audit.Repeated++
+		}
+	}
+	return audit
+}
+
 type item struct {
 	Index   int       `json:"index"`
 	ID      string    `json:"id"`
@@ -397,6 +456,11 @@ func (h *harness) run(ctx context.Context) error {
 	}
 	h.r.Checks["expectedAttemptsPerChannel"] = covered
 	h.r.Checks["providerRollingSecondWithinQuota"] = covered && withinQuota && err == nil
+	if c.Audit {
+		audit := h.audit(ctx)
+		h.r.Receipts = &audit
+		h.r.Checks["eachLogicalIdObservedOnceAtProvider"] = audit.Checked == c.Total && audit.ReadErrors == 0 && audit.Missing == 0 && audit.Repeated == 0
+	}
 	return ctx.Err()
 }
 func run() int {
@@ -412,6 +476,7 @@ func run() int {
 	flag.DurationVar(&c.Poll, "poll", 250*time.Millisecond, "status polling interval per batch")
 	flag.DurationVar(&c.Deadline, "deadline", 3*time.Minute, "overall deadline")
 	flag.StringVar(&c.Label, "label", "", "deployment configuration/replica label")
+	flag.BoolVar(&c.Audit, "audit-receipts", false, "after timings, query the fixture for POST counts per accepted notification ID")
 	flag.StringVar(&output, "out", "", "optional pretty JSON output file")
 	flag.Parse()
 	defaults, ok := map[string]struct {
