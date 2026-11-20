@@ -12,6 +12,8 @@ curl http://127.0.0.1:8080/healthz
 docker compose ps -a
 ```
 
+If port 8080 is occupied, prefix Compose commands with `API_PORT=18080` and use `http://127.0.0.1:18080` for the API. For make targets also set `API_URL=http://127.0.0.1:18080`.
+
 The first run downloads the service images, applies versioned SQL migrations, creates Kafka topics, and registers the PostgreSQL CDC connector. Wait for the API health check and the connector-init job to finish before measuring delivery. The default provider is a local simulator. The development ports bind to loopback. Go 1.26.4 is used for host-side builds and tests.
 
 ```sh
@@ -23,7 +25,7 @@ curl -sS http://127.0.0.1:8080/v1/notifications \
 
 A successful create returns HTTP 202 with an ID and batch ID. Poll `GET /v1/notifications/{id}`, or connect a WebSocket to `/v1/notifications/{id}/events`. The provider's subsequent 202 records `accepted`: the provider accepted the submission. Recipient receipts require an additional provider contract.
 
-See [OpenAPI](openapi.yaml) for the full HTTP contract. [Webhook.site setup and verification](docs/webhook-site.md) uses a disposable endpoint and one synthetic message. Run load experiments only with the local simulator.
+See [OpenAPI](openapi.yaml) for the full HTTP contract and [API examples](docs/api-examples.md) for batches, scheduling, templates and reconnects. [Webhook.site setup and verification](docs/webhook-site.md) uses a disposable endpoint and one synthetic message. Run load experiments only with the local simulator.
 
 ## Delivery path
 
@@ -72,7 +74,7 @@ The client create key identifies API intent. The provider key identifies a singl
 | `docker compose up -d --scale worker=3` | Exercise the same channel budget with three workers |
 | `docker compose down` | Stop the stack and retain data volumes |
 
-[Verification results](reports/) include measurements of this implementation, the environment and the exact scope of each run. The CI workflow runs on GitHub. The release workflow can build a versioned container image and publish packages on a version tag.
+[Verification results](reports/) include measurements of this implementation, the environment and the exact scope of each run. Run the complete replica and workload comparison with `scripts/bench.sh` against an isolated, idle stack. It temporarily scales workers and resets the local simulator counters. See [failure investigation](docs/operations.md) for manual inspection. The CI workflow runs on GitHub. The release workflow can build a versioned container image and publish packages on a version tag.
 
 ## Observability and operating assumptions
 
