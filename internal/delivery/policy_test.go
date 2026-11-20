@@ -211,3 +211,44 @@ func BenchmarkBuildProviderRequest(b *testing.B) {
 		req.Body.Close()
 	}
 }
+
+// A later rejection can be produced before the provider checks its idempotency
+// cache, for example after a credential expires between attempts.
+func TestRetryRejectionPreservesUnknown(t *testing.T) {
+	job := initialJob()
+	var posts atomic.Int32
+	var acceptedByProvider atomic.Bool
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Idempotency-Key") != job.ID {
+			t.Error("provider received unexpected key")
+		}
+		if posts.Add(1) == 1 {
+			acceptedByProvider.Store(true)
+			conn, _, err := w.(http.Hijacker).Hijack()
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			conn.Close()
+			return
+		}
+		w.WriteHeader(http.StatusUnauthorized)
+	}))
+	defer server.Close()
+	store := new(recordStore)
+	engine := Engine{URL: server.URL, Client: server.Client(), Store: store, Idempotent: true}
+	job.FirstAttemptAt = time.Now()
+	if err := engine.Send(t.Context(), job); err != nil {
+		t.Fatal(err)
+	}
+	if store.state != retryWait {
+		t.Fatalf("lost ack: state=%s, want retry_wait", store.state)
+	}
+	job.Attempt++
+	if err := engine.Send(t.Context(), job); err != nil {
+		t.Fatal(err)
+	}
+	if !acceptedByProvider.Load() || posts.Load() != 2 || store.state != unknown || !store.due.IsZero() {
+		t.Fatalf("after retry rejected: provider accepted=%t posts=%d state=%s next=%v, want accepted=true posts=2 state=unknown and no retry", acceptedByProvider.Load(), posts.Load(), store.state, store.due)
+	}
+}

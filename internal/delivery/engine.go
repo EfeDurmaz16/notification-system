@@ -89,9 +89,16 @@ func (e *Engine) Send(ctx context.Context, j Job) error {
 		if j.Attempt < e.maxAttempts() && (!e.Idempotent || candidate.Add(client.Timeout).Before(until)) {
 			out.state = retryWait
 			next = candidate
-		} else if out.safeRetry && !(e.Idempotent && j.Attempt > 1) {
+		} else if out.safeRetry {
 			out.state = failed
 		}
+	}
+	// A later rejection (for example after credentials expire) only describes
+	// the current attempt. Without a persisted definitive outcome for every
+	// earlier attempt, stop retrying and retain the original uncertainty.
+	if e.Idempotent && j.Attempt > 1 && out.state == failed {
+		out.state = unknown
+		out.reason = "prior_attempt_unresolved"
 	}
 	// A timed-out request can already have taken effect. Record the outcome even
 	// when a worker is shutting down; never use the canceled provider context.

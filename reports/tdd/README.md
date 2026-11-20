@@ -10,6 +10,10 @@ The first test pauses the worker immediately before its conditional claim. A can
 
 Reproduce the cancellation test against the current code with `go test -run TestCancellationWinsZeroProviderPOSTs -count=1 -v ./internal/delivery`. These tests isolate the delivery engine with an in-memory store. PostgreSQL and end-to-end tests separately exercise the production state transitions.
 
+## Ambiguous retry regression
+
+An idempotent provider accepted the first POST and disconnected before its acknowledgment. The retry reused the same key and received HTTP 401. A later rejection can occur before an idempotency lookup and only establishes what happened to that attempt. The engine conservatively leaves this notification unknown and stops retrying. First-attempt permanent rejections remain failed. Compare the [original failed assertion](05-ambiguous-red.txt) and [race-tested fix](06-ambiguous-green.txt).
+
 ## Provider contract references
 
 - [Webhook.site Requests API](https://docs.webhook.site/api/requests.html) describes request capture and configured responses. Capture alone provides no external idempotency contract.
