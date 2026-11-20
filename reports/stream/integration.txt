@@ -20,3 +20,4 @@ redis: 2026/11/20 22:38:07 pool.go:770: redis: connection pool: failed to dial a
     worker_test.go:260: lower offset failure replays offsets 0 and 1; after durable success the next member resumes at offset 2
 --- PASS: TestKafkaRedeliveryAfterFailedBatch (0.21s)
 PASS
+ok  	github.com/EfeDurmaz16/notification-system/internal/stream	4.166s
