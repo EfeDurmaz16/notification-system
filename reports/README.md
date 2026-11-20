@@ -11,6 +11,7 @@ The release candidate was exercised with a real PostgreSQL, Kafka, Debezium and 
 | Does a malformed Kafka event block the next valid notification? | [Quarantine marker and consumer offset check](quarantine/README.md) |
 | How do the current load, stress and Go benchmarks run? | [Commands, measurements and CI scope](suite-check/README.md) |
 | Can a larger high-priority share bring burst p95 below 64 seconds? | [Priority weight comparison on 10,000 SMS](high-p95/README.md) |
+| When does adding or removing workers help during a traffic wave? | [Latency, backlog and replica use with fixed and changing worker counts](traffic-wave/README.md) |
 | How much time did work spend before the send claim versus at the provider? | [SQL stage breakdown](bench/tuned/burst-10000-stages.tsv), [measurement definitions](../docs/persistence.md#stage-latency-after-a-load-run) |
 | What happens if a dependency stops or a worker dies after acceptance? | [Fault sequence and original results](recovery.md), [release candidate rerun](final-recovery/README.md) |
 | Can an independent client safely replay? | [Request-body identity regression](api/checks.md), [later provider rejection after a lost acknowledgment](tdd/README.md) |
