@@ -21,6 +21,8 @@ Run the complete suite on an otherwise idle stack. It changes worker replica cou
 
 The [ingress share experiment](../reports/ingress-share/README.md) compares standalone and batch traffic at the same priority. It measures queue latency, provider acceptance, and the batch share of send claims during intervals when both lanes have waiting work.
 
+Run `make channel-isolation` for the separate [channel admission experiment](../reports/channel-isolation/README.md). It builds two worker images from the pinned baseline, applies the experimental patch to one of them, and compares push latency and SMS throughput. Output goes to `$(RESULTS)/channel-isolation`. The default service build uses the original worker.
+
 For a single burst, load, stress, mixed-channel or failure run, start Compose with `make up`, then use e.g. `make burst LOAD_FLAGS="-total 1000 -batch 1000"`. Run `make down` to stop the primary stack while retaining its volumes. Set `API_PORT=18080` consistently when 8080 is occupied. Set `POSTGRES_PORT`, `REDIS_PORT`, `KAFKA_PORT` and `PROVIDER_PORT` when their default published ports are occupied.
 
 GitHub CI runs functional checks, isolated benchmarks, a bounded burst and the saturated ingress test at a 20% batch target on three workers. On a version tag, the release workflow requires a clean rerun of CI before publishing release assets and a container image. The complete matrix and fault experiments remain individually runnable on demand. [Distributed trace inspection](tracing.md) and the [one-request webhook.site smoke test](webhook-site.md) have their own setup and commands.

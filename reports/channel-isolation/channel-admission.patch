@@ -1,0 +1,277 @@
+diff --git a/internal/stream/worker.go b/internal/stream/worker.go
+--- a/internal/stream/worker.go
++++ b/internal/stream/worker.go
+@@ -133 +133 @@
+-	event   event
++	job     delivery.Job
+@@ -136,0 +137,5 @@
++type admittedTask struct {
++	task
++	lease slot
++}
++
+@@ -319,7 +324,24 @@
+-	input := make(chan batch)
+-	ready := make(chan task)
+-	group.Go(func() error {
+-		s := scheduler{batchPercent: cfg.BatchSharePercent}
+-		s.run(ctx, input, ready)
+-		return nil
+-	})
++	inputs := make(map[string]chan batch)
++	sends := make(chan admittedTask)
++	for _, channel := range []string{"sms", "email", "push"} {
++		input := make(chan batch)
++		inputs[channel] = input
++		ready := make(chan task)
++		group.Go(func() error {
++			s := scheduler{batchPercent: cfg.BatchSharePercent}
++			s.run(ctx, input, ready)
++			return nil
++		})
++		group.Go(func() error {
++			for {
++				select {
++				case <-ctx.Done():
++					return nil
++				case t := <-ready:
++					if err := admit(ctx, limit, t, sends); err != nil {
++						t.result <- outcome{record: t.record, err: err}
++					}
++				}
++			}
++		})
++	}
+@@ -332,2 +354,6 @@
+-				case t := <-ready:
+-					t.result <- outcome{record: t.record, err: process(ctx, store, sender, limit, t.event, t.admitBy)}
++				case t := <-sends:
++					callCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
++					err := sender.Send(callCtx, t.job)
++					cancel()
++					release(ctx, limit, t.job, t.lease)
++					t.result <- outcome{record: t.record, err: err}
+@@ -340 +366 @@
+-			group.Go(func() error { return consume(ctx, cfg, route{p, lane}, input) })
++			group.Go(func() error { return consume(ctx, cfg, route{p, lane}, store, inputs) })
+@@ -346,14 +372,6 @@
+-func process(ctx context.Context, store Store, sender Sender, limit limiter, e event, admitBy time.Time) error {
+-	admissionCtx, cancelAdmission := context.WithDeadline(ctx, admitBy)
+-	defer cancelAdmission()
+-	job, err := store.GetJob(admissionCtx, e.ID)
+-	if err != nil {
+-		return fmt.Errorf("load notification %s: %w", e.ID, err)
+-	}
+-	if e.Attempt < job.Attempt {
+-		return nil
+-	}
+-	if e.Attempt > job.Attempt {
+-		return fmt.Errorf("%w: event=%d row=%d", errFutureGeneration, e.Attempt, job.Attempt)
+-	}
+-	lease, err := limit.acquire(admissionCtx, job.Channel)
++// Each channel has one admission loop. Waiting for a Redis permit consumes
++// no send worker. At most one granted permit per channel waits for a worker.
++func admit(ctx context.Context, limit limiter, t task, sends chan<- admittedTask) error {
++	admission, cancel := context.WithDeadline(ctx, t.admitBy)
++	defer cancel()
++	lease, err := limit.acquire(admission, t.job.Channel)
+@@ -363 +381,11 @@
+-	callCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
++	select {
++	case sends <- admittedTask{task: t, lease: lease}:
++		return nil
++	case <-admission.Done():
++		release(ctx, limit, t.job, lease)
++		return admission.Err()
++	}
++}
++
++func release(ctx context.Context, limit limiter, job delivery.Job, lease slot) {
++	releaseCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Second)
+@@ -365,11 +393,19 @@
+-	err = sender.Send(callCtx, job)
+-	// On shutdown keep the reservation conservative if Redis is unreachable.
+-	releaseCtx, releaseCancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Second)
+-	defer releaseCancel()
+-	if releaseErr := limit.release(releaseCtx, lease); releaseErr != nil {
+-		slog.Warn("quota release deferred to lease expiry", "id", job.ID, "channel", job.Channel, "error", releaseErr)
+-	}
+-	return err
+-}
+-
+-func consume(ctx context.Context, cfg Config, r route, in chan<- batch) error {
++	if err := limit.release(releaseCtx, lease); err != nil {
++		slog.Warn("quota release deferred to lease expiry", "id", job.ID, "channel", job.Channel, "error", err)
++	}
++}
++
++// Routing uses the same durable job snapshot previously read by the send
++// worker. Engine.Send still obtains the final atomic send right from the DB.
++func load(ctx context.Context, store Store, e event) (delivery.Job, bool, error) {
++	job, err := store.GetJob(ctx, e.ID)
++	if err != nil {
++		return delivery.Job{}, false, fmt.Errorf("load notification %s: %w", e.ID, err)
++	}
++	if e.Attempt > job.Attempt {
++		return delivery.Job{}, false, fmt.Errorf("%w: event=%d row=%d", errFutureGeneration, e.Attempt, job.Attempt)
++	}
++	return job, e.Attempt == job.Attempt, nil
++}
++
++func consume(ctx context.Context, cfg Config, r route, store Store, inputs map[string]chan batch) error {
+@@ -387 +423 @@
+-		err = consumeBatches(ctx, client, r, in, &window)
++		err = consumeBatches(ctx, client, r, store, inputs, &window)
+@@ -400 +436 @@
+-func consumeBatches(ctx context.Context, client *kgo.Client, r route, in chan<- batch, window *pollWindow) error {
++func consumeBatches(ctx context.Context, client *kgo.Client, r route, store Store, inputs map[string]chan batch, window *pollWindow) error {
+@@ -418 +454 @@
+-		err := processBatch(ctx, client, r, in, records, more)
++		err := processBatch(ctx, client, r, store, inputs, records, more)
+@@ -435 +471 @@
+-func processBatch(parent context.Context, client *kgo.Client, source route, in chan<- batch, records []*kgo.Record, more bool) error {
++func processBatch(parent context.Context, client *kgo.Client, source route, store Store, inputs map[string]chan batch, records []*kgo.Record, more bool) error {
+@@ -440 +476,4 @@
+-	b := batch{route: source, more: more}
++	admitBy := deadline.Add(-40 * time.Second)
++	routing, stop := context.WithDeadline(ctx, admitBy)
++	defer stop()
++	lanes := make(map[string][]task)
+@@ -449,6 +488,25 @@
+-		b.tasks = append(b.tasks, task{event: e, record: r, result: results, admitBy: deadline.Add(-40 * time.Second)})
+-	}
+-	select {
+-	case <-ctx.Done():
+-		return ctx.Err()
+-	case in <- b:
++		job, current, err := load(routing, store, e)
++		if errors.Is(err, dbstore.ErrNotFound) || errors.Is(err, errFutureGeneration) {
++			if err := quarantine(ctx, client, r); err != nil {
++				return err
++			}
++			continue
++		}
++		if err != nil {
++			return err
++		}
++		if current {
++			if inputs[job.Channel] == nil {
++				return fmt.Errorf("no admission queue for channel %q", job.Channel)
++			}
++			lanes[job.Channel] = append(lanes[job.Channel], task{job: job, record: r, result: results, admitBy: admitBy})
++		}
++	}
++	queued := 0
++	for channel, jobs := range lanes {
++		select {
++		case <-routing.Done():
++			return routing.Err()
++		case inputs[channel] <- batch{route: source, more: more, tasks: jobs}:
++			queued += len(jobs)
++		}
+@@ -457 +515 @@
+-	for range b.tasks {
++	for range queued {
+diff --git a/internal/stream/ingress_test.go b/internal/stream/ingress_test.go
+--- a/internal/stream/ingress_test.go
++++ b/internal/stream/ingress_test.go
+@@ -7,0 +8,2 @@
++
++	"github.com/EfeDurmaz16/notification-system/internal/delivery"
+@@ -51 +53 @@
+-			in <- batch{route: route{2, singleLane}, tasks: []task{{event: event{ID: "single"}}}}
++			in <- batch{route: route{2, singleLane}, tasks: []task{{job: delivery.Job{ID: "single"}}}}
+@@ -55 +57 @@
+-		gotBulk := job.event.ID == ""
++		gotBulk := job.job.ID == ""
+@@ -87 +89 @@
+-				jobs[i].event = event{ID: "single", Attempt: p}
++				jobs[i].job = delivery.Job{ID: "single", Attempt: p}
+@@ -89 +91 @@
+-					jobs[i].event.ID = "bulk"
++					jobs[i].job.ID = "bulk"
+@@ -97 +99 @@
+-		e := (<-out).event
++		e := (<-out).job
+diff --git a/internal/stream/worker_test.go b/internal/stream/worker_test.go
+--- a/internal/stream/worker_test.go
++++ b/internal/stream/worker_test.go
+@@ -76 +76 @@
+-					jobs[i].event.Attempt = class
++					jobs[i].job.Attempt = class
+@@ -83 +83 @@
+-				got[job.event.Attempt]++
++				got[job.job.Attempt]++
+@@ -96,4 +95,0 @@
+-type sendFunc func(context.Context, delivery.Job) error
+-
+-func (f sendFunc) Send(ctx context.Context, j delivery.Job) error { return f(ctx, j) }
+-
+@@ -102,3 +98,3 @@
+-	send := sendFunc(func(context.Context, delivery.Job) error { t.Fatal("unexpected send"); return nil })
+-	if err := process(t.Context(), s, send, limiter{}, event{ID: "example", Attempt: 1}, time.Now().Add(time.Second)); err != nil {
+-		t.Fatal(err)
++	_, eligible, err := load(t.Context(), s, event{ID: "example", Attempt: 1})
++	if eligible || err != nil {
++		t.Fatalf("stale event: eligible=%v, err=%v", eligible, err)
+@@ -112,3 +108,5 @@
+-	send := sendFunc(func(context.Context, delivery.Job) error { t.Fatal("sent while quota unavailable"); return nil })
+-	if err := process(t.Context(), testJobs{job}, send, limiter{client: client, prefix: "test:"}, event{ID: "a", Attempt: 1}, time.Now().Add(time.Second)); err == nil {
+-		t.Fatal("expected quota error")
++	sends := make(chan admittedTask, 1)
++	task := task{job: job, admitBy: time.Now().Add(time.Second)}
++	err := admit(t.Context(), limiter{client: client, prefix: "test:"}, task, sends)
++	if err == nil || len(sends) != 0 {
++		t.Fatalf("quota failure: err=%v, admitted=%d", err, len(sends))
+@@ -232 +230,5 @@
+-			go func() { result <- consumeBatches(pollCtx, consumer, route{}, in, &pollWindow{size: 8, cap: 8}) }()
++			store := testJobs{delivery.Job{Channel: "sms", Attempt: 1}}
++			inputs := map[string]chan batch{"sms": in}
++			go func() {
++				result <- consumeBatches(pollCtx, consumer, route{}, store, inputs, &pollWindow{size: 8, cap: 8})
++			}()
+diff --git a/internal/store/store_test.go b/internal/store/store_test.go
+--- a/internal/store/store_test.go
++++ b/internal/store/store_test.go
+@@ -6,0 +7,2 @@
++	"net/http"
++	"net/http/httptest"
+@@ -10,0 +13 @@
++	"sync/atomic"
+@@ -12,0 +16,2 @@
++
++	"github.com/EfeDurmaz16/notification-system/internal/delivery"
+@@ -347,0 +353,33 @@
++
++// The admission queue may already contain a job payload when the API cancels it.
++func TestCancelAfterJobHydrationMakesZeroProviderPOSTs(t *testing.T) {
++	s := testStore(t)
++	ctx := t.Context()
++	id := createOne(t, s, sms())
++	hydrated, err := s.GetJob(ctx, id)
++	if err != nil {
++		t.Fatal(err)
++	}
++	if err := s.Cancel(ctx, id); err != nil {
++		t.Fatal(err)
++	}
++	var posts atomic.Int32
++	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++		if r.Method == http.MethodPost {
++			posts.Add(1)
++		}
++		w.WriteHeader(http.StatusInternalServerError)
++	}))
++	defer provider.Close()
++	engine := delivery.Engine{Store: s, URL: provider.URL, Client: provider.Client()}
++	if err := engine.Send(ctx, hydrated); err != nil {
++		t.Fatal(err)
++	}
++	final, err := s.Get(ctx, id)
++	if err != nil {
++		t.Fatal(err)
++	}
++	if final.Status != "cancelled" || final.MessageID != "" || posts.Load() != 0 {
++		t.Fatalf("after admission of cached job: status=%s, messageID=%q, POSTs=%d", final.Status, final.MessageID, posts.Load())
++	}
++}

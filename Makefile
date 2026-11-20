@@ -11,7 +11,7 @@ TEST_DATABASE_URL ?= postgres://notify:notify@127.0.0.1:$(or $(POSTGRES_PORT),54
 RESULTS ?= .local/results
 LOAD_FLAGS ?=
 
-.PHONY: help fmt lint test race build check up down smoke integration ci performance burst load stress mixed failures package openapi contract matrix recovery crash rebalance quarantine wave verify-all
+.PHONY: help fmt lint test race build check up down smoke integration ci performance burst load stress mixed failures package openapi contract matrix recovery crash rebalance quarantine wave channel-isolation verify-all
 
 help:
 	@printf '%s\n' 'make check        Format check, vet, unit tests, race detector, binaries' \
@@ -24,6 +24,7 @@ help:
 		'make rebalance    Kill one of three workers under load and audit every ID' \
 		'make quarantine   Verify a malformed Kafka record and subsequent delivery' \
 		'make wave         Compare fixed, scheduled and feedback scaling on a traffic wave' \
+		'make channel-isolation  Compare push latency under an SMS backlog on two worker builds' \
 		'make package      Package committed sources and matching native binaries in dist/'
 
 fmt:
@@ -95,6 +96,9 @@ quarantine:
 
 wave:
 	python3 -B scripts/traffic-wave.py --out-dir "$(RESULTS)/traffic-wave"
+
+channel-isolation:
+	bash scripts/run-channel-isolation.sh "$(RESULTS)/channel-isolation"
 
 # Sequence measurements to avoid competing load and failure injections on the same host.
 verify-all:
