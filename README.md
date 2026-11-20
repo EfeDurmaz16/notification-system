@@ -77,7 +77,7 @@ The client create key identifies API intent. The provider key identifies a singl
 | `docker compose up -d --scale worker=3` | Exercise the same channel budget with three workers |
 | `docker compose down` | Stop the stack and retain data volumes |
 
-[Verification results](reports/) include measurements of this implementation, the environment and the exact scope of each run. Run the complete replica and workload comparison with `scripts/bench.sh` against an isolated, idle stack. It temporarily scales workers and resets the local simulator counters. See [failure investigation](docs/operations.md) for manual inspection. The CI workflow runs on GitHub. The release workflow can build a versioned container image and publish packages on a version tag.
+[Verification results and review guide](reports/README.md) include measurements of this implementation, the environment and the exact scope of each run. Run the complete replica and workload comparison with `scripts/bench.sh` against an isolated, idle stack. It temporarily scales workers and resets the local simulator counters. See [failure investigation](docs/operations.md) for manual inspection. The CI workflow runs on GitHub. The release workflow can build a versioned container image and publish packages on a version tag.
 
 ## Observability and operating assumptions
 
