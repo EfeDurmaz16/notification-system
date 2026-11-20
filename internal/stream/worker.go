@@ -65,10 +65,25 @@ func decode(data []byte) (event, error) {
 	return e, nil
 }
 
+const batchBudget = 105 * time.Second
+
+// Keep the low-only window large enough to fill the pool at the default
+// concurrency. The upper bound limits replay exposure during a rebalance.
+func pollLimit(workers, class int) int {
+	places := 0
+	for _, p := range weighted {
+		if p == class {
+			places++
+		}
+	}
+	return places * min(workers, 24)
+}
+
 type task struct {
-	event  event
-	record *kgo.Record
-	result chan<- outcome
+	admitBy time.Time
+	event   event
+	record  *kgo.Record
+	result  chan<- outcome
 }
 type outcome struct {
 	record *kgo.Record
@@ -138,7 +153,7 @@ func Run(ctx context.Context, cfg Config, store Store, sender Sender) error {
 				case <-ctx.Done():
 					return nil
 				case t := <-ready:
-					t.result <- outcome{record: t.record, err: process(ctx, store, sender, limit, t.event)}
+					t.result <- outcome{record: t.record, err: process(ctx, store, sender, limit, t.event, t.admitBy)}
 				}
 			}
 		})
@@ -149,8 +164,10 @@ func Run(ctx context.Context, cfg Config, store Store, sender Sender) error {
 	return group.Wait()
 }
 
-func process(ctx context.Context, store Store, sender Sender, limit limiter, e event) error {
-	job, err := store.GetJob(ctx, e.ID)
+func process(ctx context.Context, store Store, sender Sender, limit limiter, e event, admitBy time.Time) error {
+	admissionCtx, cancelAdmission := context.WithDeadline(ctx, admitBy)
+	defer cancelAdmission()
+	job, err := store.GetJob(admissionCtx, e.ID)
 	if err != nil {
 		return fmt.Errorf("load notification %s: %w", e.ID, err)
 	}
@@ -160,7 +177,7 @@ func process(ctx context.Context, store Store, sender Sender, limit limiter, e e
 	if e.Attempt > job.Attempt {
 		return fmt.Errorf("%w: event=%d row=%d", errFutureGeneration, e.Attempt, job.Attempt)
 	}
-	lease, err := limit.acquire(ctx, job.Channel)
+	lease, err := limit.acquire(admissionCtx, job.Channel)
 	if err != nil {
 		return err
 	}
@@ -187,7 +204,7 @@ func consume(ctx context.Context, cfg Config, class int, in chan<- batch) error 
 		if err != nil {
 			return fmt.Errorf("configure %s: %w", topic, err)
 		}
-		err = consumeBatches(ctx, client, class, in, max(16, min(2*cfg.Workers, 64)))
+		err = consumeBatches(ctx, client, class, in, pollLimit(cfg.Workers, class))
 		client.CloseAllowingRebalance()
 		if ctx.Err() != nil {
 			return nil
@@ -211,47 +228,60 @@ func consumeBatches(ctx context.Context, client *kgo.Client, class int, in chan<
 			client.AllowRebalance()
 			continue
 		}
-		results := make(chan outcome, len(records))
-		b := batch{class: class}
-		for _, r := range records {
-			e, err := decode(r.Value)
-			if err != nil {
-				if err := quarantine(ctx, client, r); err != nil {
-					return err
-				}
-				continue
-			}
-			b.tasks = append(b.tasks, task{event: e, record: r, result: results})
-		}
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case in <- b:
-		}
-		var firstErr error
-		for range b.tasks {
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			case result := <-results:
-				if errors.Is(result.err, dbstore.ErrNotFound) || errors.Is(result.err, errFutureGeneration) {
-					result.err = quarantine(ctx, client, result.record)
-				}
-				if result.err != nil && firstErr == nil {
-					firstErr = result.err
-				}
-			}
-		}
-		if firstErr != nil {
-			return firstErr
-		}
-		// Every fetched offset is either durably processed or quarantined.
-		// Never commit past a still-running lower offset in the same partition.
-		if err := client.CommitUncommittedOffsets(ctx); err != nil {
+		err := processBatch(ctx, client, class, in, records)
+		if err != nil {
 			return err
 		}
 		client.AllowRebalance()
 	}
+}
+
+// Bound time spent holding a group generation. Stop new dispatch admissions
+// early enough to finish the bounded provider call before the commit deadline.
+func processBatch(parent context.Context, client *kgo.Client, class int, in chan<- batch, records []*kgo.Record) error {
+	deadline := time.Now().Add(batchBudget)
+	ctx, cancel := context.WithDeadline(parent, deadline)
+	defer cancel()
+	results := make(chan outcome, len(records))
+	b := batch{class: class}
+	for _, r := range records {
+		e, err := decode(r.Value)
+		if err != nil {
+			if err := quarantine(ctx, client, r); err != nil {
+				return err
+			}
+			continue
+		}
+		b.tasks = append(b.tasks, task{event: e, record: r, result: results, admitBy: deadline.Add(-40 * time.Second)})
+	}
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case in <- b:
+	}
+	var firstErr error
+	for range b.tasks {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case result := <-results:
+			if errors.Is(result.err, dbstore.ErrNotFound) || errors.Is(result.err, errFutureGeneration) {
+				result.err = quarantine(ctx, client, result.record)
+			}
+			if result.err != nil && firstErr == nil {
+				firstErr = result.err
+			}
+		}
+	}
+	if firstErr != nil {
+		return firstErr
+	}
+	// Every fetched offset is either durably processed or quarantined.
+	// Never commit past a still-running lower offset in the same partition.
+	if err := client.CommitUncommittedOffsets(ctx); err != nil {
+		return err
+	}
+	return nil
 }
 
 func quarantine(ctx context.Context, client *kgo.Client, r *kgo.Record) error {

@@ -36,6 +36,23 @@ func TestDecodeReadyEvent(t *testing.T) {
 	}
 }
 
+func TestPollLimitTracksWeightAndCapsReplay(t *testing.T) {
+	for _, tc := range []struct {
+		workers int
+		windows [3]int
+	}{
+		{1, [3]int{6, 3, 1}},
+		{24, [3]int{144, 72, 24}},
+		{128, [3]int{144, 72, 24}},
+	} {
+		for class, want := range tc.windows {
+			if got := pollLimit(tc.workers, class); got != want {
+				t.Errorf("workers=%d class=%d got %d want %d", tc.workers, class, got, want)
+			}
+		}
+	}
+}
+
 func TestWeightedDispatch(t *testing.T) {
 	for _, tc := range []struct {
 		name              string
@@ -83,7 +100,7 @@ func (f sendFunc) Send(ctx context.Context, j delivery.Job) error { return f(ctx
 func TestStaleEventCannotDispatch(t *testing.T) {
 	s := testJobs{delivery.Job{ID: "example", Attempt: 2}}
 	send := sendFunc(func(context.Context, delivery.Job) error { t.Fatal("unexpected send"); return nil })
-	if err := process(t.Context(), s, send, limiter{}, event{ID: "example", Attempt: 1}); err != nil {
+	if err := process(t.Context(), s, send, limiter{}, event{ID: "example", Attempt: 1}, time.Now().Add(time.Second)); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -93,7 +110,7 @@ func TestQuotaBackendFailureBlocksSend(t *testing.T) {
 	defer client.Close()
 	job := delivery.Job{ID: "a", Channel: "sms", Attempt: 1}
 	send := sendFunc(func(context.Context, delivery.Job) error { t.Fatal("sent while quota unavailable"); return nil })
-	if err := process(t.Context(), testJobs{job}, send, limiter{client: client, prefix: "test:"}, event{ID: "a", Attempt: 1}); err == nil {
+	if err := process(t.Context(), testJobs{job}, send, limiter{client: client, prefix: "test:"}, event{ID: "a", Attempt: 1}, time.Now().Add(time.Second)); err == nil {
 		t.Fatal("expected quota error")
 	}
 }
