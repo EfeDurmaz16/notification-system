@@ -1,0 +1,236 @@
+{
+  "utcStart": "2026-11-20T21:15:35.005619+00:00",
+  "image": "sha256:4b7f7c2bb612b7928220f646494d24c29c3b55510cacba460d6457e41995d149",
+  "share": 20,
+  "workerReplicas": 3,
+  "concurrencyEach": 24,
+  "minimumUnclaimedEachLane": 72,
+  "profiles": {
+    "saturated": {
+      "single": {
+        "arrivalSpanSeconds": 11.423,
+        "observedSingleIngressPerSecond": 139.98,
+        "count": 1600,
+        "queueP50Ms": 9378.09,
+        "queueP95Ms": 16987.6,
+        "acceptedP95Ms": 17009.73,
+        "drainSeconds": 29.445,
+        "acceptedPerSecond": 54.34
+      },
+      "batch": {
+        "arrivalSpanSeconds": 0.045,
+        "observedSingleIngressPerSecond": null,
+        "count": 1600,
+        "queueP50Ms": 25345.95,
+        "queueP95Ms": 37274.95,
+        "acceptedP95Ms": 37298.29,
+        "drainSeconds": 38.356,
+        "acceptedPerSecond": 41.71
+      },
+      "marker": "19f03e82-ff83-4d11-a1d7-b7268a260e5f",
+      "offeredSinglePerSecond": 140,
+      "providerDelta": {
+        "attempts": 3200,
+        "accepted": 3200,
+        "failures": 0,
+        "responseLost": 0,
+        "deduplicated": 0
+      },
+      "outboxTopics": {
+        "notifications.low": 1600,
+        "notifications.low.single": 1600
+      },
+      "rollingSmsPeakSinceProviderStart": 94,
+      "contended": {
+        "seconds": 26,
+        "batchPercent": 30.4,
+        "batchPerSecond": 25.15,
+        "singlePerSecond": 57.58,
+        "bins": [
+          {
+            "second": 3,
+            "single": 22,
+            "batch": 69,
+            "minSingleQueued": 197,
+            "minBatchQueued": 1296
+          },
+          {
+            "second": 4,
+            "single": 41,
+            "batch": 50,
+            "minSingleQueued": 315,
+            "minBatchQueued": 1246
+          },
+          {
+            "second": 5,
+            "single": 40,
+            "batch": 30,
+            "minSingleQueued": 413,
+            "minBatchQueued": 1216
+          },
+          {
+            "second": 6,
+            "single": 22,
+            "batch": 8,
+            "minSingleQueued": 502,
+            "minBatchQueued": 1208
+          },
+          {
+            "second": 7,
+            "single": 57,
+            "batch": 33,
+            "minSingleQueued": 632,
+            "minBatchQueued": 1175
+          },
+          {
+            "second": 8,
+            "single": 65,
+            "batch": 24,
+            "minSingleQueued": 715,
+            "minBatchQueued": 1151
+          },
+          {
+            "second": 9,
+            "single": 55,
+            "batch": 35,
+            "minSingleQueued": 789,
+            "minBatchQueued": 1116
+          },
+          {
+            "second": 10,
+            "single": 71,
+            "batch": 21,
+            "minSingleQueued": 874,
+            "minBatchQueued": 1095
+          },
+          {
+            "second": 11,
+            "single": 70,
+            "batch": 21,
+            "minSingleQueued": 944,
+            "minBatchQueued": 1074
+          },
+          {
+            "second": 12,
+            "single": 72,
+            "batch": 18,
+            "minSingleQueued": 1014,
+            "minBatchQueued": 1056
+          },
+          {
+            "second": 13,
+            "single": 74,
+            "batch": 17,
+            "minSingleQueued": 992,
+            "minBatchQueued": 1039
+          },
+          {
+            "second": 14,
+            "single": 73,
+            "batch": 18,
+            "minSingleQueued": 919,
+            "minBatchQueued": 1021
+          },
+          {
+            "second": 15,
+            "single": 74,
+            "batch": 17,
+            "minSingleQueued": 845,
+            "minBatchQueued": 1004
+          },
+          {
+            "second": 16,
+            "single": 73,
+            "batch": 17,
+            "minSingleQueued": 772,
+            "minBatchQueued": 987
+          },
+          {
+            "second": 17,
+            "single": 56,
+            "batch": 34,
+            "minSingleQueued": 716,
+            "minBatchQueued": 953
+          },
+          {
+            "second": 18,
+            "single": 62,
+            "batch": 28,
+            "minSingleQueued": 654,
+            "minBatchQueued": 925
+          },
+          {
+            "second": 19,
+            "single": 67,
+            "batch": 21,
+            "minSingleQueued": 587,
+            "minBatchQueued": 904
+          },
+          {
+            "second": 20,
+            "single": 56,
+            "batch": 17,
+            "minSingleQueued": 531,
+            "minBatchQueued": 887
+          },
+          {
+            "second": 21,
+            "single": 47,
+            "batch": 13,
+            "minSingleQueued": 484,
+            "minBatchQueued": 874
+          },
+          {
+            "second": 22,
+            "single": 19,
+            "batch": 4,
+            "minSingleQueued": 465,
+            "minBatchQueued": 870
+          },
+          {
+            "second": 23,
+            "single": 54,
+            "batch": 36,
+            "minSingleQueued": 411,
+            "minBatchQueued": 834
+          },
+          {
+            "second": 24,
+            "single": 60,
+            "batch": 29,
+            "minSingleQueued": 351,
+            "minBatchQueued": 805
+          },
+          {
+            "second": 25,
+            "single": 74,
+            "batch": 17,
+            "minSingleQueued": 277,
+            "minBatchQueued": 788
+          },
+          {
+            "second": 26,
+            "single": 73,
+            "batch": 18,
+            "minSingleQueued": 204,
+            "minBatchQueued": 770
+          },
+          {
+            "second": 27,
+            "single": 61,
+            "batch": 30,
+            "minSingleQueued": 143,
+            "minBatchQueued": 740
+          },
+          {
+            "second": 28,
+            "single": 59,
+            "batch": 29,
+            "minSingleQueued": 84,
+            "minBatchQueued": 711
+          }
+        ]
+      }
+    }
+  }
+}
