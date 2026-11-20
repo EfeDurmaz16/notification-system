@@ -1,0 +1,4 @@
+=== RUN   TestCancellationWinsZeroProviderPOSTs
+--- PASS: TestCancellationWinsZeroProviderPOSTs (0.00s)
+PASS
+ok  	command-line-arguments	0.248s

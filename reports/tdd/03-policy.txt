@@ -1,0 +1,51 @@
+=== RUN   TestCancellationWinsZeroProviderPOSTs
+--- PASS: TestCancellationWinsZeroProviderPOSTs (0.00s)
+=== RUN   TestProviderContract
+=== RUN   TestProviderContract/accepted
+=== RUN   TestProviderContract/incomplete_ack
+2026/11/20 22:34:47 WARN provider result notification_id=stable-id channel=email attempt=1 status=unknown reason=malformed_ack provider_http_status=202
+=== RUN   TestProviderContract/malformed_ack
+2026/11/20 22:34:47 WARN provider result notification_id=stable-id channel=email attempt=1 status=unknown reason=malformed_ack provider_http_status=202
+=== RUN   TestProviderContract/rejected
+2026/11/20 22:34:47 WARN provider result notification_id=stable-id channel=email attempt=1 status=failed reason=provider_rejected provider_http_status=400
+=== RUN   TestProviderContract/relay_error
+2026/11/20 22:34:47 WARN provider result notification_id=stable-id channel=email attempt=1 status=unknown reason=provider_outcome_unknown provider_http_status=502
+=== RUN   TestProviderContract/idempotent_relay_error
+2026/11/20 22:34:47 WARN provider result notification_id=stable-id channel=email attempt=1 status=retry_wait reason=provider_outcome_unknown provider_http_status=502
+=== RUN   TestProviderContract/idempotent_throttled
+2026/11/20 22:34:47 WARN provider result notification_id=stable-id channel=email attempt=1 status=retry_wait reason=provider_outcome_unknown provider_http_status=429
+=== RUN   TestProviderContract/webhook_throttled
+2026/11/20 22:34:47 WARN provider result notification_id=stable-id channel=email attempt=1 status=unknown reason=provider_outcome_unknown provider_http_status=429
+--- PASS: TestProviderContract (0.01s)
+    --- PASS: TestProviderContract/accepted (0.00s)
+    --- PASS: TestProviderContract/incomplete_ack (0.00s)
+    --- PASS: TestProviderContract/malformed_ack (0.00s)
+    --- PASS: TestProviderContract/rejected (0.00s)
+    --- PASS: TestProviderContract/relay_error (0.00s)
+    --- PASS: TestProviderContract/idempotent_relay_error (0.00s)
+    --- PASS: TestProviderContract/idempotent_throttled (0.00s)
+    --- PASS: TestProviderContract/webhook_throttled (0.00s)
+=== RUN   TestLostAckRetriesOnlyWithProviderGuarantee
+=== RUN   TestLostAckRetriesOnlyWithProviderGuarantee/idempotent_false
+2026/11/20 22:34:47 WARN provider result notification_id=stable-id channel=email attempt=1 status=unknown reason=transport_outcome_unknown provider_http_status=0
+=== RUN   TestLostAckRetriesOnlyWithProviderGuarantee/idempotent_true
+2026/11/20 22:34:47 WARN provider result notification_id=stable-id channel=email attempt=1 status=retry_wait reason=transport_outcome_unknown provider_http_status=0
+--- PASS: TestLostAckRetriesOnlyWithProviderGuarantee (0.00s)
+    --- PASS: TestLostAckRetriesOnlyWithProviderGuarantee/idempotent_false (0.00s)
+    --- PASS: TestLostAckRetriesOnlyWithProviderGuarantee/idempotent_true (0.00s)
+=== RUN   TestNeverFollowProviderRedirect
+2026/11/20 22:34:47 WARN provider result notification_id=stable-id channel=email attempt=1 status=unknown reason=provider_outcome_unknown provider_http_status=307
+--- PASS: TestNeverFollowProviderRedirect (0.00s)
+=== RUN   TestPreDispatchFailureAndRetryExhaustion
+2026/11/20 22:34:47 WARN provider result notification_id=stable-id channel=email attempt=1 status=retry_wait reason=dial_failed provider_http_status=0
+2026/11/20 22:34:47 WARN provider result notification_id=stable-id channel=email attempt=2 status=failed reason=dial_failed provider_http_status=0
+--- PASS: TestPreDispatchFailureAndRetryExhaustion (0.00s)
+=== RUN   TestExpiredOrMissingIdempotencyWindowPreventsPOST
+2026/11/20 22:34:47 WARN provider result notification_id=stable-id channel=email attempt=2 status=unknown reason=idempotency_window_expired provider_http_status=0
+2026/11/20 22:34:47 WARN provider result notification_id=stable-id channel=email attempt=2 status=unknown reason=idempotency_window_expired provider_http_status=0
+--- PASS: TestExpiredOrMissingIdempotencyWindowPreventsPOST (0.00s)
+=== RUN   TestStoreErrorsPropagate
+--- PASS: TestStoreErrorsPropagate (0.00s)
+PASS
+coverage: 95.6% of statements
+ok  	github.com/EfeDurmaz16/notification-system/internal/delivery	1.324s	coverage: 95.6% of statements
