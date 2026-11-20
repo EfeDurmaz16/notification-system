@@ -25,6 +25,12 @@
 
 Further reading: [Kafka concepts](https://kafka.apache.org/intro/), [PostgreSQL logical decoding](https://www.postgresql.org/docs/current/logicaldecoding-explanation.html), [safe retries](https://aws.amazon.com/builders-library/making-retries-safe-with-idempotent-APIs/), [Uber Go style](https://github.com/uber-go/guide), [Effective Go](https://go.dev/doc/effective_go).
 
+## Default batch share
+
+Use a 20% batch weight within each priority. Oracle's ERP example gives interactive transactions 80% of CPU and allows batch jobs to consume at least 20% plus unused capacity. In SMS, Twilio illustrates a 100-message/s sender with a 70/30 split between important and regular traffic and redistributes idle capacity. These examples allocate different resources and classify traffic differently. [Oracle Resource Manager example](https://docs.oracle.com/html/E25494_01/dbrm007.htm) · [Twilio Traffic Shaping](https://www.twilio.com/docs/messaging/features/traffic-shaping)
+
+At the 20% setting our two local saturation runs gave batches 25 to 30 send claims/s and standalone traffic 58 to 60/s. A 10% setting shortened standalone p95 by about four seconds and reduced campaign progress. A 40% setting raised campaign progress to about 42/s and pushed standalone p95 above 21 seconds. For a deployment with a campaign deadline, divide the number of messages by the available seconds, then choose the smallest tested share that can sustain that batch rate while meeting the standalone latency target. [Measured tradeoffs](../reports/ingress-share/README.md)
+
 ## State transitions
 
 ```mermaid
