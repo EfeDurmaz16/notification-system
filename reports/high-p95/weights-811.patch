@@ -1,0 +1,5 @@
+--- a/internal/stream/worker.go
++++ b/internal/stream/worker.go
+@@ -44 +44 @@
+-var weighted = [...]int{0, 0, 0, 0, 0, 0, 1, 1, 1, 2}
++var weighted = [...]int{0, 0, 0, 0, 0, 0, 0, 0, 1, 2}
