@@ -1,0 +1,353 @@
+openapi: 3.0.3
+info:
+  title: Notification System
+  version: 1.0.0
+  description: |
+    Submit SMS, email and push work for asynchronous delivery. The create
+    response confirms durable acceptance by this API. The notification status
+    "accepted" records acceptance by the external provider. Recipient delivery
+    receipts are outside the provider protocol. All timestamps use RFC 3339.
+    Supply X-Correlation-ID with 1 to 128 visible ASCII characters to reuse a
+    request correlation ID. The server otherwise generates and returns one.
+    Create operations accept JSON bodies up to 5 MiB.
+servers:
+  - url: /
+tags:
+  - name: Notifications
+  - name: Batches
+  - name: Operations
+paths:
+  /v1/notifications:
+    post:
+      tags: [Notifications]
+      operationId: createNotification
+      summary: Submit one notification
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Input'
+      responses:
+        '202':
+          description: Notification committed and available for status queries.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id, batchId]
+                properties:
+                  id: {type: string}
+                  batchId: {type: string}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '413': {$ref: '#/components/responses/TooLarge'}
+        '415': {$ref: '#/components/responses/UnsupportedMedia'}
+        '422': {$ref: '#/components/responses/InvalidItem'}
+        default: {$ref: '#/components/responses/Failure'}
+    get:
+      tags: [Notifications]
+      operationId: listNotifications
+      summary: Filter and page notifications
+      parameters:
+        - name: status
+          in: query
+          schema: {$ref: '#/components/schemas/Status'}
+        - name: channel
+          in: query
+          schema: {$ref: '#/components/schemas/Channel'}
+        - {name: from, in: query, description: Inclusive lower creation time bound., schema: {type: string, format: date-time}}
+        - {name: to, in: query, description: Exclusive upper creation time bound., schema: {type: string, format: date-time}}
+        - {name: limit, in: query, schema: {type: integer, minimum: 1, maximum: 100, default: 50}}
+        - {name: offset, in: query, schema: {type: integer, minimum: 0, default: 0}}
+      responses:
+        '200':
+          description: Matching page.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, limit, offset]
+                properties:
+                  items:
+                    type: array
+                    items: {$ref: '#/components/schemas/Notification'}
+                  limit: {type: integer}
+                  offset: {type: integer}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        default: {$ref: '#/components/responses/Failure'}
+  /v1/notifications/{id}:
+    parameters:
+      - $ref: '#/components/parameters/ID'
+    get:
+      tags: [Notifications]
+      operationId: getNotification
+      summary: Read the current notification state
+      responses:
+        '200':
+          description: Current persisted notification.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Notification'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        default: {$ref: '#/components/responses/Failure'}
+  /v1/notifications/{id}/cancel:
+    parameters:
+      - $ref: '#/components/parameters/ID'
+    post:
+      tags: [Notifications]
+      operationId: cancelNotification
+      summary: Cancel work before dispatch
+      description: A successful cancellation prevents a subsequent provider POST for this notification.
+      responses:
+        '204': {description: Cancellation confirmed.}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        default: {$ref: '#/components/responses/Failure'}
+  /v1/notifications/{id}/events:
+    parameters:
+      - $ref: '#/components/parameters/ID'
+    get:
+      tags: [Notifications]
+      operationId: watchNotification
+      summary: Upgrade to WebSocket for notification snapshots
+      description: |
+        Connect with a WebSocket client. Text frames contain Notification JSON.
+        Reconnect or query the notification by ID for the latest snapshot.
+      x-websocket-message-schema:
+        $ref: '#/components/schemas/Notification'
+      responses:
+        '101': {description: Switched to WebSocket protocol.}
+        '400':
+          description: WebSocket upgrade handshake failed.
+          content:
+            text/plain:
+              schema: {type: string}
+        '403':
+          description: WebSocket origin check failed.
+          content:
+            text/plain:
+              schema: {type: string}
+        '404': {$ref: '#/components/responses/NotFound'}
+        default: {$ref: '#/components/responses/Failure'}
+  /v1/batches:
+    post:
+      tags: [Batches]
+      operationId: createBatch
+      summary: Submit up to 1000 notifications with partial acceptance
+      description: |
+        Results use zero-based input indexes. Invalid recipients or content
+        produce item errors. Retry a lost response with the original key and
+        original body to recover the same accepted IDs.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [notifications]
+              additionalProperties: false
+              properties:
+                notifications:
+                  type: array
+                  minItems: 1
+                  maxItems: 1000
+                  items: {$ref: '#/components/schemas/Input'}
+      responses:
+        '202': {$ref: '#/components/responses/Batch'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '413': {$ref: '#/components/responses/TooLarge'}
+        '415': {$ref: '#/components/responses/UnsupportedMedia'}
+        '422':
+          description: No valid item could be accepted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Batch'
+        default: {$ref: '#/components/responses/Failure'}
+  /v1/batches/{id}:
+    parameters:
+      - $ref: '#/components/parameters/ID'
+    get:
+      tags: [Batches]
+      operationId: getBatch
+      summary: Read per-item status for a batch
+      responses:
+        '200': {$ref: '#/components/responses/Batch'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        default: {$ref: '#/components/responses/Failure'}
+  /healthz:
+    get:
+      tags: [Operations]
+      operationId: getHealth
+      summary: Check API health
+      responses:
+        '200': {$ref: '#/components/responses/Health'}
+        '503': {$ref: '#/components/responses/Health'}
+  /metrics:
+    get:
+      tags: [Operations]
+      operationId: getMetrics
+      summary: Scrape Prometheus metrics
+      responses:
+        '200':
+          description: Prometheus text exposition.
+          content:
+            text/plain:
+              schema: {type: string}
+        default: {$ref: '#/components/responses/Failure'}
+components:
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: Stable, caller-generated key for one logical create operation. Reuse it with identical input on retry.
+      schema: {type: string, minLength: 1, maxLength: 128, pattern: '^[!-~]+$'}
+    ID:
+      name: id
+      in: path
+      required: true
+      schema: {type: string}
+  schemas:
+    Channel:
+      type: string
+      enum: [sms, email, push]
+    Priority:
+      type: string
+      enum: [high, normal, low]
+    Status:
+      type: string
+      enum: [pending, scheduled, sending, retry_wait, accepted, failed, unknown, cancelled]
+      description: Unknown means an attempt may have reached the provider and its outcome is unresolved.
+    Input:
+      type: object
+      additionalProperties: false
+      required: [recipient, channel, priority]
+      oneOf:
+        - required: [content]
+        - required: [template]
+      properties:
+        recipient:
+          type: string
+          minLength: 1
+          description: E.164 number for SMS, plain email address for email, or a push token without whitespace.
+        channel: {$ref: '#/components/schemas/Channel'}
+        priority: {$ref: '#/components/schemas/Priority'}
+        content:
+          type: string
+          minLength: 1
+          description: Character limits after rendering are 160 for SMS, 10000 for email and 256 for push.
+        template:
+          type: string
+          minLength: 1
+          description: Inline message text using double-braced variable names.
+          example: 'Hello {{name}}'
+        variables:
+          type: object
+          additionalProperties: {type: string}
+        scheduledAt:
+          type: string
+          format: date-time
+          description: Earliest dispatch time. Past times are eligible immediately.
+      example:
+        recipient: '+12025550147'
+        channel: sms
+        priority: high
+        content: Your pickup is ready.
+    Notification:
+      type: object
+      required: [id, batchId, recipient, channel, content, priority, status, attempt, createdAt, updatedAt]
+      properties:
+        id: {type: string}
+        batchId: {type: string}
+        recipient: {type: string}
+        channel: {$ref: '#/components/schemas/Channel'}
+        content: {type: string}
+        priority: {$ref: '#/components/schemas/Priority'}
+        status: {$ref: '#/components/schemas/Status'}
+        messageId: {type: string, description: External provider identifier after acceptance.}
+        attempt: {type: integer, minimum: 0}
+        createdAt: {type: string, format: date-time}
+        updatedAt: {type: string, format: date-time}
+        scheduledAt: {type: string, format: date-time}
+    Batch:
+      type: object
+      required: [batchId, items]
+      properties:
+        batchId: {type: string}
+        items:
+          type: array
+          items:
+            type: object
+            required: [index]
+            oneOf:
+              - required: [id, status]
+              - required: [error]
+            properties:
+              index: {type: integer, minimum: 0}
+              id: {type: string}
+              status: {$ref: '#/components/schemas/Status'}
+              error: {type: string}
+              createdAt: {type: string, format: date-time, description: Included for accepted items on batch lookup.}
+              updatedAt: {type: string, format: date-time, description: Included for accepted items on batch lookup.}
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error: {type: string}
+  responses:
+    TooLarge:
+      description: JSON body exceeds 5 MiB.
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+    UnsupportedMedia:
+      description: Unsupported Content-Type.
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+    BadRequest:
+      description: Invalid request, query parameters or required header.
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+    InvalidItem:
+      description: Notification failed validation.
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+    NotFound:
+      description: No matching resource.
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+    Conflict:
+      description: Operation conflicts with the saved request or current notification state.
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+    Failure:
+      description: Request could not be completed.
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+    Batch:
+      description: Indexed batch results.
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Batch'}
+    Health:
+      description: API dependency check.
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [status]
+            properties:
+              status: {type: string, enum: [ok, unavailable]}
