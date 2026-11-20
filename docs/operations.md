@@ -24,3 +24,18 @@ docker compose logs --since 5m worker
 Redis unavailability prevents new permits. Durable work can keep entering PostgreSQL during a Kafka outage. Once the connector resumes, the outbox replays through Kafka. Repeated ready records reuse the same notification and generation. Malformed records are quarantined with source coordinates in `notifications.invalid`.
 
 Keep an eye on the age of pending work and available disk, especially for extended outages. Admission can eventually fail when PostgreSQL runs out of storage. Compose uses one broker and one database; its interruption tests exercise process recovery on persistent volumes. The suite records the tested conditions and times in [reports](../reports/).
+
+## Configuration
+
+All worker replicas in a deployment must use the same database, Kafka cluster, consumer group prefix, Redis instance and provider contract. Changing the group prefix can replay earlier records. Existing DB rows still guard send claims.
+
+| Environment | Meaning |
+|---|---|
+| `DATABASE_URL` | Required PostgreSQL DSN for both modes. Startup applies migrations under a DB advisory lock. |
+| `HTTP_ADDR` | API bind address, default :8080 inside the container. `API_PORT` selects the published host port in Compose. |
+| `KAFKA_BROKERS`, `KAFKA_GROUP` | Comma-separated Kafka bootstrap servers and delivery consumer group prefix. |
+| `REDIS_ADDR` | Shared rate limiter in host:port form. |
+| `WORKER_CONCURRENCY` | Total active worker slots in one replica. Compose starts with 24. |
+| `PROVIDER_URL` | Worker submission URL. Compose defaults to the local synthetic HTTP service. |
+| `PROVIDER_IDEMPOTENT`, `PROVIDER_KEY_WINDOW` | Default false, window default 24h. Enable only with a confirmed provider contract and set its actual key-retention interval. |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | Optional trace collector. The Compose tracing profile supplies Jaeger. |
