@@ -1,0 +1,20 @@
+=== RUN   TestConcurrentCreateReplay
+--- PASS: TestConcurrentCreateReplay (0.10s)
+=== RUN   TestCancelSendRace
+--- PASS: TestCancelSendRace (0.15s)
+=== RUN   TestGenerationFenceAndScheduledSend
+--- PASS: TestGenerationFenceAndScheduledSend (0.07s)
+=== RUN   TestStaleRecoveryHonorsProviderContract
+=== RUN   TestStaleRecoveryHonorsProviderContract/no_guarantee
+=== RUN   TestStaleRecoveryHonorsProviderContract/active_guarantee
+=== RUN   TestStaleRecoveryHonorsProviderContract/expired_guarantee
+=== RUN   TestStaleRecoveryHonorsProviderContract/exhausted
+--- PASS: TestStaleRecoveryHonorsProviderContract (0.16s)
+    --- PASS: TestStaleRecoveryHonorsProviderContract/no_guarantee (0.02s)
+    --- PASS: TestStaleRecoveryHonorsProviderContract/active_guarantee (0.03s)
+    --- PASS: TestStaleRecoveryHonorsProviderContract/expired_guarantee (0.03s)
+    --- PASS: TestStaleRecoveryHonorsProviderContract/exhausted (0.01s)
+=== RUN   TestAtomicRollbackOnStoreFailure
+--- PASS: TestAtomicRollbackOnStoreFailure (0.10s)
+PASS
+ok  	github.com/EfeDurmaz16/notification-system/internal/store	1.922s
