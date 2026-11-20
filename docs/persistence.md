@@ -23,3 +23,37 @@ TEST_DATABASE_URL='postgres://notify:notify@127.0.0.1:54329/notify?sslmode=disab
 ```
 
 The suite covers concurrent idempotent creation, partial validation, atomic rollback, cancellation versus send claims, stable creation replay after state changes, scheduling, stale event generations, crash recovery, query filters, and latency aggregation.
+
+## Stage latency after a load run
+
+Read the `runId` field from the harness JSON and pass its value to
+the read-only query after traffic has drained:
+
+```sh
+psql "$DATABASE_URL" -X -q -v run_id="$RUN_ID" -f scripts/latency-breakdown.sql
+```
+
+The query selects batch keys matching the exact run identity followed by a numeric
+offset. Check the batch and notification counts before interpreting percentiles.
+Each duration uses PostgreSQL trigger timestamps from the first generation of the
+same notification. Scheduled or retried deliveries can lack one or more stage
+samples. The table reports sample counts explicitly.
+
+- Pending to sending covers the remainder of the create transaction after its
+  trigger, CDC propagation, Kafka backlog, scheduling, limiter waits, and the send
+  claim. The query cannot isolate these costs individually.
+- Sending to accepted includes the remaining send-claim commit, worker and HTTP
+  time, the local provider, and the update up to the accepted status trigger.
+- Pending to accepted is the per-notification sum. Percentiles are calculated
+  separately per stage; adding stage percentiles does not recover the total
+  percentile.
+- All times use one database clock. These boundaries differ from client request
+  start, API response receipt, external provider receipt, and queue polling.
+  They measure simulated provider acceptance, not final handset delivery.
+
+For priority behavior, run `scripts/priority-dispatch.sql` with the same
+`run_id`. Its half-open windows start at the cohort's first durable send claim.
+Counts use first-attempt claims, with pending-but-unclaimed rows at each boundary
+to show whether a class had outstanding database work. Those rows can still be
+in CDC, in Kafka, or waiting for a local dispatch slot. A positive outstanding
+count alone does not prove every worker's local queue was populated.

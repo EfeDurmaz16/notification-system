@@ -9,6 +9,7 @@ All rows below are measurements from the files in this directory. The provider i
 | burst-3w | 1000 | 1000 | 1000 | 53.4 | 11097.1 | 11310.3 | 84.7 | 11.76 | 92 |
 | failures | 30 | 30 | 30 | 8.0 | 261.2 | 505.7 | 23.9 | 0.25 | 28 |
 | load | 600 | 600 | 600 | 6.7 | 285.0 | 506.2 | 49.6 | 0.30 | 59 |
+| mixed | 3000 | 3000 | 3000 | 66.6 | 11291.6 | 11321.0 | 248.5 | 12.01 | 91 |
 | stress | 1200 | 1200 | 1200 | 7.6 | 4989.0 | 5004.7 | 81.4 | 5.47 | 93 |
 
 ## Outcomes
@@ -18,6 +19,7 @@ All rows below are measurements from the files in this directory. The provider i
 - **burst-3w**: accepted=1000. Provider accepted 1000, rejected 0, lost responses 0. Outstanding at deadline 0. Failed checks: none.
 - **failures**: accepted=10, failed=10, unknown=10. Provider accepted 20, rejected 10, lost responses 10. Outstanding at deadline 0. Failed checks: none.
 - **load**: accepted=600. Provider accepted 600, rejected 0, lost responses 0. Outstanding at deadline 0. Failed checks: none.
+- **mixed**: accepted=3000. Provider accepted 3000, rejected 0, lost responses 0. Outstanding at deadline 0. Failed checks: none.
 - **stress**: accepted=1200. Provider accepted 1200, rejected 0, lost responses 0. Outstanding at deadline 0. Failed checks: none.
 
 ## Method
@@ -39,4 +41,15 @@ The largest observed backlog is sampled once per second and equals API acknowled
 | burst-3w | 947 | 10072.0 | 11380.2 | 11140.0 |
 | failures | 1 | 252.5 | 252.5 | 262.6 |
 | load | 15 | 287.8 | 293.9 | 273.3 |
+| mixed | 2837 | 8695.8 | 11611.8 | 11211.7 |
 | stress | 407 | 4838.0 | 4617.7 | 5268.7 |
+
+## Independent channel quotas
+
+Three-channel burst across independent budgets, with each priority represented on each channel.
+
+| Channel | Requests received | Peak requests in a sliding second |
+| --- | ---: | ---: |
+| email | 1000 | 91 |
+| push | 1000 | 91 |
+| sms | 1000 | 91 |

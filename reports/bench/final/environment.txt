@@ -1,0 +1,15 @@
+UTC start: 2026-11-20T19:43:10Z
+go version go1.26.4 darwin/arm64
+29.4.0
+Docker Compose version v5.1.2
+de7e90065e0c2430890b14a6c9cd2ee436ef1819
+SERVICE    IMAGE                             STATUS
+api        notification-system:local         Up 42 seconds (healthy)
+connect    quay.io/debezium/connect:3.4      Up 8 minutes (healthy)
+jaeger     jaegertracing/all-in-one:1.73.0   Up 7 minutes
+kafka      apache/kafka:4.1.2                Up 8 minutes (healthy)
+postgres   postgres:17-alpine                Up 8 minutes (healthy)
+provider   notification-system:local         Up 42 seconds (healthy)
+redis      redis:7.4-alpine                  Up 8 minutes (healthy)
+worker     notification-system:local         Up 36 seconds
+Application image: sha256:b7b572836ee92c65d4532e8051dd0169ced14d227ecdcdb37f3e6b748244890e

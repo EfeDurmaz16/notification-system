@@ -1,0 +1,13 @@
+start_seconds	end_seconds	priority	outstanding_at_start	claims	outstanding_at_end
+0	10	high	3334	300	3034
+0	10	low	3333	215	3118
+0	10	normal	3333	392	2941
+10	20	high	3034	332	2702
+10	20	low	3118	314	2804
+10	20	normal	2941	273	2668
+0	30	high	3334	886	2448
+0	30	low	3333	759	2574
+0	30	normal	3333	960	2373
+20	30	high	2702	254	2448
+20	30	low	2804	230	2574
+20	30	normal	2668	295	2373
