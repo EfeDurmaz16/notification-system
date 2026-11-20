@@ -11,7 +11,7 @@ Allow approximately 10 to 20 minutes with warm caches on a developer machine, pl
 | Target | Scope and output under RESULTS |
 |---|---|
 | `make ci` | Formatting, vet, unit and race tests, builds, static and live OpenAPI validation, full Compose integration and WebSocket/HTTP smoke. The combined target saves the transcript as ci.txt. |
-| `make performance` | Five samples per Go microbenchmark including allocation counts, written to bench.txt. |
+| `make performance` | Five samples per Go microbenchmark, one package at a time, including allocation counts, written to bench.txt. |
 | `make matrix` | Seven experiments, each with a JSON report, also environment.txt and summary.md in matrix/. One- and three-replica bursts, sustained load, increasing load, failures, 10,000 notifications and a mixed-channel run. |
 | `make recovery` | PostgreSQL-backed accepted work during worker, Kafka, Debezium, Redis and provider interruptions. Saves recovery.json. |
 | `make crash` | Abrupt worker death during a provider attempt. Includes a real two-minute stale-send wait, saves crash.json. |

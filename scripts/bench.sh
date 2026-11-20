@@ -2,6 +2,9 @@
 # Run the full scenario matrix against an isolated, already running local Compose stack.
 set -euo pipefail
 cd "$(dirname "$0")/.."
+./scripts/require-local-provider.sh
+# Any replicas created below must use the same synthetic provider.
+export PROVIDER_URL=http://provider:8081/send
 results=${RESULTS:-.local/experiments}
 mkdir -p "$results"
 api=${API_URL:-http://127.0.0.1:8080}

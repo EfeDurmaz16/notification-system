@@ -68,9 +68,10 @@ ci: check openapi integration
 
 performance:
 	mkdir -p "$(RESULTS)"
-	set -o pipefail; $(GO) test -run '^$$' -bench . -benchmem -count=5 ./... | tee "$(RESULTS)/bench.txt"
+	set -o pipefail; $(GO) test -p=1 -run '^$$' -bench . -benchmem -count=5 ./... | tee "$(RESULTS)/bench.txt"
 
 burst load stress mixed failures:
+	./scripts/require-local-provider.sh
 	mkdir -p "$(RESULTS)"
 	$(GO) run ./cmd/loadtest -scenario $@ -api "$(API_URL)" -provider "$(MOCK_PROVIDER_URL)" -out "$(RESULTS)/$@.json" $(LOAD_FLAGS)
 
