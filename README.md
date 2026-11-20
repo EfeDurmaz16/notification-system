@@ -49,6 +49,8 @@ flowchart LR
 4. A worker changes the matching pending generation to sending in PostgreSQL before making a POST. A successful cancellation prevents that transition. Even if Kafka replays a ready event, the DB predicate fences workers from consuming the same send right.
 5. The worker stores the outcome before the consumer commits the fetched offsets. A future retry or scheduled send is promoted by a DB scheduler. The promotion and its outbox insert share a transaction.
 
+The [design decisions and state diagram](docs/decisions.md) explain the options, defaults and recovery boundaries.
+
 ## Delivery contract
 
 | Outcome | Worker action |
