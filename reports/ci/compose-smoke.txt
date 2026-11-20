@@ -1,0 +1,9 @@
+API_URL="http://127.0.0.1:18080" MOCK_PROVIDER_URL="http://127.0.0.1:8090" RUN_SMOKE=1 go test -run '^TestWorkflow$' -v -count=1 -timeout=2m ./tests/integration
+=== RUN   TestWorkflow
+    workflow_test.go:44: checking API and synthetic provider readiness
+    workflow_test.go:83: verified scheduled template, idempotent replay, conflict and WebSocket cancellation
+    workflow_test.go:102: verified partial batch, replay and end-to-end provider acceptance
+    workflow_test.go:116: verified zero actual POSTs for cancelled ID and exactly one for replayed accepted ID
+--- PASS: TestWorkflow (9.01s)
+PASS
+ok  	github.com/EfeDurmaz16/notification-system/tests/integration	9.131s
