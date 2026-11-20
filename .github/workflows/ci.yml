@@ -45,6 +45,8 @@ jobs:
       - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: go.mod
+      - name: Verify poison-record quarantine and subsequent delivery on an isolated Kafka broker
+        run: make quarantine RESULTS=.local/ci
       - run: make integration
       - name: Exercise a bounded burst against the local synthetic provider
         run: make burst RESULTS=.local/ci LOAD_FLAGS="-total 300 -batch 100"

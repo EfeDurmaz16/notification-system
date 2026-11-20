@@ -11,7 +11,7 @@ TEST_DATABASE_URL ?= postgres://notify:notify@127.0.0.1:$(or $(POSTGRES_PORT),54
 RESULTS ?= .local/results
 LOAD_FLAGS ?=
 
-.PHONY: help fmt lint test race build check up down smoke integration ci performance burst load stress mixed failures package openapi contract matrix recovery crash rebalance verify-all
+.PHONY: help fmt lint test race build check up down smoke integration ci performance burst load stress mixed failures package openapi contract matrix recovery crash rebalance quarantine verify-all
 
 help:
 	@printf '%s\n' 'make check        Format check, vet, unit tests, race detector, binaries' \
@@ -22,6 +22,7 @@ help:
 		'make performance  Benchmark isolated code paths, report time and allocations' \
 		'make burst/load/stress/mixed/failures  Run one experiment on the local stack' \
 		'make rebalance    Kill one of three workers under load and audit every ID' \
+		'make quarantine   Verify a malformed Kafka record and subsequent delivery' \
 		'make package      Package committed sources and matching native binaries in dist/'
 
 fmt:
@@ -65,7 +66,7 @@ integration:
 	TEST_KAFKA_BROKER="$(TEST_KAFKA_BROKER)" TEST_REDIS_ADDR="$(TEST_REDIS_ADDR)" $(GO) test -race -count=1 -v ./internal/stream
 	$(MAKE) smoke contract
 
-ci: check openapi integration
+ci: check openapi integration quarantine
 
 performance:
 	mkdir -p "$(RESULTS)"
@@ -87,6 +88,9 @@ crash:
 
 rebalance:
 	python3 -B scripts/worker-rebalance.py --out-dir "$(RESULTS)/worker-rebalance"
+
+quarantine:
+	python3 -B scripts/quarantine.py --report "$(RESULTS)/quarantine.json"
 
 # Sequence measurements to avoid competing load and failure injections on the same host.
 verify-all:
