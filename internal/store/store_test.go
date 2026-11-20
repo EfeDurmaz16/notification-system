@@ -14,7 +14,7 @@ import (
 
 // Each test owns a unique schema. The supplied database and all other schemas
 // remain untouched, including when other integration processes run concurrently.
-func testStore(t *testing.T) *Store {
+func testDSN(t *testing.T) string {
 	t.Helper()
 	raw := os.Getenv("TEST_DATABASE_URL")
 	if raw == "" {
@@ -41,7 +41,12 @@ func testStore(t *testing.T) *Store {
 	q := u.Query()
 	q.Set("search_path", schema)
 	u.RawQuery = q.Encode()
-	s, err := Open(context.Background(), u.String())
+	return u.String()
+}
+
+func testStore(t *testing.T) *Store {
+	t.Helper()
+	s, err := Open(context.Background(), testDSN(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -53,7 +58,7 @@ func sms() Item {
 }
 func createOne(t *testing.T, s *Store, item Item) string {
 	t.Helper()
-	r, err := s.Create(t.Context(), uuid(), []byte("digest"), []Item{item})
+	r, err := s.Create(t.Context(), uuid(), []byte("digest"), SingleIngress, []Item{item})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,7 +76,11 @@ func TestConcurrentCreateReplay(t *testing.T) {
 	results := make(chan result, count)
 	fire := make(chan struct{})
 	for range count {
-		go func() { <-fire; r, e := s.Create(ctx, "replay", []byte("same"), items); results <- result{r, e} }()
+		go func() {
+			<-fire
+			r, e := s.Create(ctx, "replay", []byte("same"), BatchIngress, items)
+			results <- result{r, e}
+		}()
 	}
 	close(fire)
 	var original BatchResult
@@ -89,7 +98,7 @@ func TestConcurrentCreateReplay(t *testing.T) {
 	if original.Items[1].Error == "" || original.Items[1].ID != "" {
 		t.Fatal("invalid item accepted")
 	}
-	if _, err := s.Create(ctx, "replay", []byte("different"), items); !errors.Is(err, ErrConflict) {
+	if _, err := s.Create(ctx, "replay", []byte("different"), BatchIngress, items); !errors.Is(err, ErrConflict) {
 		t.Fatalf("different payload: %v", err)
 	}
 	var notifications, outbox int
@@ -110,11 +119,97 @@ func TestConcurrentCreateReplay(t *testing.T) {
 	if current.Items[0].Status != "cancelled" || current.Items[0].UpdatedAt == nil {
 		t.Fatal(current)
 	}
-	replay, err := s.Create(ctx, "replay", []byte("same"), items)
+	replay, err := s.Create(ctx, "replay", []byte("same"), BatchIngress, items)
 	if err != nil || !reflect.DeepEqual(replay, original) {
 		t.Fatalf("replay after cancellation: %+v %v", replay, err)
 	}
 }
+func TestReadyEventsKeepIngress(t *testing.T) {
+	s := testStore(t)
+	ctx := t.Context()
+	for _, priority := range []string{"low", "normal", "high"} {
+		for _, ingress := range []Ingress{SingleIngress, BatchIngress} {
+			t.Run(priority+"/"+string(ingress), func(t *testing.T) {
+				item := sms()
+				item.Priority = priority
+				key := uuid()
+				result, err := s.Create(ctx, key, []byte("digest"), ingress, []Item{item})
+				if err != nil {
+					t.Fatal(err)
+				}
+				replay, err := s.Create(ctx, key, []byte("digest"), ingress, []Item{item})
+				if err != nil || !reflect.DeepEqual(result, replay) {
+					t.Fatalf("replay = %+v, %v", replay, err)
+				}
+				id := result.Items[0].ID
+				if ok, err := s.Start(ctx, id, 1); err != nil || !ok {
+					t.Fatalf("claim = %v, %v", ok, err)
+				}
+				if err := s.Finish(ctx, id, 1, "retry_wait", "", time.Now().Add(-time.Minute)); err != nil {
+					t.Fatal(err)
+				}
+				if err := s.Tick(ctx, time.Hour); err != nil {
+					t.Fatal(err)
+				}
+				wantTopic := "notifications." + priority
+				if ingress == SingleIngress {
+					wantTopic += ".single"
+				}
+				var count, correct int
+				err = s.db.QueryRow(`SELECT count(*), count(*) FILTER (WHERE aggregatetype=$2)
+					FROM outbox WHERE aggregateid=$1`, id, wantTopic).Scan(&count, &correct)
+				if err != nil || count != 2 || correct != 2 {
+					t.Fatalf("events = %d; on %s = %d; error = %v", count, wantTopic, correct, err)
+				}
+			})
+		}
+	}
+}
+
+func TestLegacyScheduledNotificationUsesBatchTopic(t *testing.T) {
+	ctx := t.Context()
+	dsn := testDSN(t)
+	db, err := sql.Open("pgx", dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	v1, err := migrations.ReadFile("migrations/001_notification.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(ctx, string(v1)); err != nil {
+		t.Fatal(err)
+	}
+	_, err = db.ExecContext(ctx, `CREATE TABLE schema_migrations (version text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now());
+		INSERT INTO schema_migrations(version) VALUES('migrations/001_notification.sql')`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := uuid()
+	_, err = db.ExecContext(ctx, `WITH old_batch AS (
+		INSERT INTO batches(id,idempotency_key,request_hash,response) VALUES(gen_random_uuid(),'old','hash','{}') RETURNING id)
+		INSERT INTO notifications(id,batch_id,item_index,recipient,channel,content,priority,status,attempt,next_attempt_at)
+		SELECT $1,id,0,'+15555550100','sms','legacy','low','scheduled',1,now() FROM old_batch`, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := Open(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if err := s.Tick(ctx, time.Hour); err != nil {
+		t.Fatal(err)
+	}
+	var ingress, topic string
+	err = db.QueryRow(`SELECT n.ingress, o.aggregatetype FROM notifications n
+		JOIN outbox o ON o.aggregateid=n.id WHERE n.id=$1`, id).Scan(&ingress, &topic)
+	if err != nil || ingress != "batch" || topic != "notifications.low" {
+		t.Fatalf("legacy ingress=%q topic=%q error=%v", ingress, topic, err)
+	}
+}
+
 func TestCancelSendRace(t *testing.T) {
 	s := testStore(t)
 	ctx := t.Context()
@@ -192,7 +287,7 @@ func TestGenerationFenceAndScheduledSend(t *testing.T) {
 	if err := s.Finish(ctx, id, 2, "accepted", "remote", time.Time{}); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.db.QueryRow("SELECT count(*) FROM outbox WHERE aggregateid=$1", id).Scan(&out); err != nil || out != 2 {
+	if err := s.db.QueryRow("SELECT count(*) FROM outbox WHERE aggregateid=$1 AND aggregatetype='notifications.high.single'", id).Scan(&out); err != nil || out != 2 {
 		t.Fatalf("scheduled outbox count %d %v", out, err)
 	}
 	m, err := s.Metrics(ctx)
@@ -242,7 +337,7 @@ func TestAtomicRollbackOnStoreFailure(t *testing.T) {
 	a := sms()
 	b := a
 	b.Channel = "invalid"
-	if _, err := s.Create(t.Context(), "rollback", []byte{1}, []Item{a, b}); err == nil {
+	if _, err := s.Create(t.Context(), "rollback", []byte{1}, BatchIngress, []Item{a, b}); err == nil {
 		t.Fatal("expected SQL constraint failure")
 	}
 	n := 0

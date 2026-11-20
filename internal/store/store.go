@@ -84,6 +84,14 @@ func (s *Store) migrate(ctx context.Context) error {
 	return tx.Commit()
 }
 
+// Ingress records the create endpoint so later attempts keep the same dispatch lane.
+type Ingress string
+
+const (
+	BatchIngress  Ingress = "batch"
+	SingleIngress Ingress = "single"
+)
+
 type Item struct {
 	Recipient, Channel, Content, Priority, Error string
 	ScheduledAt                                  *time.Time
@@ -115,9 +123,18 @@ type bulkRow struct {
 	Scheduled                                         *time.Time
 }
 
-func (s *Store) Create(ctx context.Context, key string, hash []byte, items []Item) (BatchResult, error) {
+func (s *Store) Create(ctx context.Context, key string, hash []byte, ingress Ingress, items []Item) (BatchResult, error) {
 	if key == "" || len(hash) == 0 || len(items) == 0 || len(items) > 1000 {
 		return BatchResult{}, errors.New("invalid create envelope")
+	}
+	switch ingress {
+	case SingleIngress:
+		if len(items) != 1 {
+			return BatchResult{}, errors.New("standalone ingress requires one notification")
+		}
+	case BatchIngress:
+	default:
+		return BatchResult{}, errors.New("unknown notification ingress")
 	}
 	res := BatchResult{BatchID: uuid(), Items: make([]ItemResult, len(items))}
 	ready := make([]bulkRow, 0, len(items))
@@ -173,13 +190,13 @@ func (s *Store) Create(ctx context.Context, key string, hash []byte, items []Ite
 	}
 	if len(ready) > 0 {
 		_, err = tx.ExecContext(ctx, `WITH added AS (
-            INSERT INTO notifications(id,batch_id,item_index,recipient,channel,content,priority,status,attempt,scheduled_at,next_attempt_at,traceparent)
+            INSERT INTO notifications(id,batch_id,item_index,recipient,channel,content,priority,status,attempt,scheduled_at,next_attempt_at,traceparent,ingress)
             SELECT x."ID",$1,x."Index",x."Recipient",x."Channel",x."Content",x."Priority",x."Status",1,x."Scheduled",
-                CASE WHEN x."Status"='scheduled' THEN x."Scheduled" END,$3
+                CASE WHEN x."Status"='scheduled' THEN x."Scheduled" END,$3,$4
             FROM jsonb_to_recordset($2::jsonb) AS x("ID" uuid,"Index" int,"Recipient" text,"Channel" text,"Content" text,
                 "Priority" text,"Status" text,"Scheduled" timestamptz)
-            RETURNING id,priority,status,attempt,traceparent)
-            `+emitReady, res.BatchID, data, observability.Traceparent(ctx))
+            RETURNING id,priority,ingress,status,attempt,traceparent)
+            `+emitReady, res.BatchID, data, observability.Traceparent(ctx), ingress)
 		if err != nil {
 			return BatchResult{}, err
 		}
@@ -191,6 +208,7 @@ func (s *Store) Create(ctx context.Context, key string, hash []byte, items []Ite
 }
 
 const emitReady = `INSERT INTO outbox(aggregatetype,aggregateid,type,payload)
-    SELECT 'notifications.' || priority,id,'NotificationReady',
+    SELECT 'notifications.' || priority || CASE WHEN ingress='single' THEN '.single' ELSE '' END,
+        id,'NotificationReady',
         jsonb_build_object('id',id,'attempt',attempt,'traceparent',traceparent)
     FROM added WHERE status='pending'`

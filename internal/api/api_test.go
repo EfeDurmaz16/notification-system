@@ -23,16 +23,17 @@ const (
 )
 
 type repositoryStub struct {
-	mu     sync.Mutex
-	items  []store.Item
-	hash   []byte
-	result store.BatchResult
-	item   store.Notification
-	filter store.Filter
-	err    error
+	mu      sync.Mutex
+	ingress store.Ingress
+	items   []store.Item
+	hash    []byte
+	result  store.BatchResult
+	item    store.Notification
+	filter  store.Filter
+	err     error
 }
 
-func (s *repositoryStub) Create(_ context.Context, _ string, hash []byte, items []store.Item) (store.BatchResult, error) {
+func (s *repositoryStub) Create(_ context.Context, _ string, hash []byte, ingress store.Ingress, items []store.Item) (store.BatchResult, error) {
 	if s.err != nil {
 		return store.BatchResult{}, s.err
 	}
@@ -42,7 +43,7 @@ func (s *repositoryStub) Create(_ context.Context, _ string, hash []byte, items 
 		}
 		return s.result, nil
 	}
-	s.hash, s.items = hash, items
+	s.hash, s.items, s.ingress = hash, items, ingress
 	s.result = store.BatchResult{BatchID: validID}
 	for i, v := range items {
 		res := store.ItemResult{Index: i, Error: v.Error}
@@ -108,6 +109,24 @@ func TestPartialBatchAndReplay(t *testing.T) {
 	conflict := call(h, "POST", "/v1/batches", strings.Replace(body, "hello", "hello again", 1), "run-1")
 	if conflict.Code != 409 {
 		t.Errorf("changed payload = %d", conflict.Code)
+	}
+}
+
+func TestIngressUsesCreateEndpoint(t *testing.T) {
+	for _, tc := range []struct {
+		path, body string
+		want       store.Ingress
+	}{
+		{"/v1/notifications", validInput, store.SingleIngress},
+		{"/v1/batches", `{"notifications":[` + validInput + `]}`, store.BatchIngress},
+	} {
+		t.Run(tc.path, func(t *testing.T) {
+			s := new(repositoryStub)
+			w := call(New(s), "POST", tc.path, tc.body, "ingress-test")
+			if w.Code != 202 || s.ingress != tc.want {
+				t.Fatalf("status=%d ingress=%q want %q", w.Code, s.ingress, tc.want)
+			}
+		})
 	}
 }
 
