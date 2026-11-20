@@ -1,0 +1,12 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/EfeDurmaz16/notification-system/internal/delivery
+cpu: Apple M5 Pro
+BenchmarkSendInProcess-18           	  350265	      3228 ns/op	    6472 B/op	      80 allocs/op
+BenchmarkSendInProcess-18           	  367917	      3223 ns/op	    6471 B/op	      80 allocs/op
+BenchmarkSendInProcess-18           	  376891	      3391 ns/op	    6471 B/op	      80 allocs/op
+BenchmarkBuildProviderRequest-18    	 2567253	       469.9 ns/op	    1161 B/op	      13 allocs/op
+BenchmarkBuildProviderRequest-18    	 2574562	       466.1 ns/op	    1161 B/op	      13 allocs/op
+BenchmarkBuildProviderRequest-18    	 2597283	       472.3 ns/op	    1161 B/op	      13 allocs/op
+PASS
+ok  	github.com/EfeDurmaz16/notification-system/internal/delivery	7.515s

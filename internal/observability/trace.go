@@ -57,6 +57,15 @@ func Traceparent(ctx context.Context) string {
 	return carrier.Get("traceparent")
 }
 
+// TraceID returns the correlation identifier shared by all spans for the request.
+func TraceID(ctx context.Context) string {
+	sc := trace.SpanContextFromContext(ctx)
+	if !sc.IsValid() {
+		return ""
+	}
+	return sc.TraceID().String()
+}
+
 // Delivery restores the context stored by the API while preserving the worker's
 // cancellation and deadlines for this attempt.
 func Delivery(ctx context.Context, parent, id string) (context.Context, func()) {

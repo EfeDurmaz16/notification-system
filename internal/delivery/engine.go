@@ -104,7 +104,7 @@ func (e *Engine) Send(ctx context.Context, j Job) error {
 	if out.state != accepted {
 		level = slog.LevelWarn
 	}
-	slog.Log(ctx, level, "provider result", "notification_id", j.ID, "channel", j.Channel,
+	slog.Log(ctx, level, "provider result", "trace_id", observability.TraceID(ctx), "notification_id", j.ID, "channel", j.Channel,
 		"attempt", j.Attempt, "status", out.state, "reason", out.reason, "provider_http_status", out.httpStatus)
 	return nil
 }
