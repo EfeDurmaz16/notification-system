@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
-	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -142,23 +141,6 @@ func strictJSON(raw []byte, v any) error {
 	return dec.Decode(v)
 }
 
-// fingerprint canonicalizes object member order and whitespace while retaining
-// array order and the endpoint. UseNumber preserves arbitrary numeric literals.
-func fingerprint(path string, raw []byte) ([]byte, error) {
-	dec := json.NewDecoder(bytes.NewReader(raw))
-	dec.UseNumber()
-	var value any
-	if err := dec.Decode(&value); err != nil {
-		return nil, err
-	}
-	hash := sha256.New()
-	io.WriteString(hash, path+"\n")
-	if err := json.NewEncoder(hash).Encode(value); err != nil {
-		return nil, err
-	}
-	return hash.Sum(nil), nil
-}
-
 func (s server) create(w http.ResponseWriter, r *http.Request) {
 	key := r.Header.Get("Idempotency-Key")
 	if len(r.Header.Values("Idempotency-Key")) != 1 || !visibleKey(key) {
@@ -181,25 +163,29 @@ func (s server) create(w http.ResponseWriter, r *http.Request) {
 		}
 		rawItems = envelope.Notifications
 	}
-	items := make([]store.Item, len(rawItems))
-	valid := 0
-	for i, raw := range rawItems {
-		items[i] = validateItem(raw)
-		if items[i].Error == "" {
-			valid++
-		}
-	}
 	hash, err := fingerprint(r.URL.Path, body)
 	if err != nil {
-		problem(w, 400, "invalid JSON input")
+		problem(w, 400, err.Error())
 		return
+	}
+	items := make([]store.Item, len(rawItems))
+	for i, raw := range rawItems {
+		items[i] = validateItem(raw)
 	}
 	res, err := s.repo.Create(r.Context(), key, hash, items)
 	if err != nil {
 		repositoryError(w, err)
 		return
 	}
-	if valid == 0 {
+	// The persisted receipt governs replay even after validation rules change.
+	accepted := false
+	for _, item := range res.Items {
+		if item.ID != "" {
+			accepted = true
+			break
+		}
+	}
+	if !accepted {
 		if !batch {
 			problem(w, 422, res.Items[0].Error)
 			return
