@@ -1,0 +1,154 @@
+[
+  {
+    "report": "baseline-1.json",
+    "probesInDatabaseCreationOrder": [
+      {
+        "id": "f7bc9264-e94e-4034-9c98-cce8a4dcadc1",
+        "priority": "low",
+        "status": "accepted",
+        "createdAt": "2026-11-20T20:25:25.069393+00:00",
+        "attempt": 1,
+        "channel": "sms",
+        "eventTopic": "notifications.low",
+        "eventType": "NotificationReady",
+        "probe": "idle"
+      },
+      {
+        "id": "727562ae-685a-42a8-8a46-53cc7177439d",
+        "priority": "low",
+        "status": "accepted",
+        "createdAt": "2026-11-20T20:25:32.235632+00:00",
+        "attempt": 1,
+        "channel": "sms",
+        "eventTopic": "notifications.low",
+        "eventType": "NotificationReady",
+        "probe": "single"
+      },
+      {
+        "id": "3a7ac9ab-da22-48e9-bed4-76d545377992",
+        "priority": "low",
+        "status": "accepted",
+        "createdAt": "2026-11-20T20:25:32.240359+00:00",
+        "attempt": 1,
+        "channel": "sms",
+        "eventTopic": "notifications.low",
+        "eventType": "NotificationReady",
+        "probe": "bulk"
+      }
+    ]
+  },
+  {
+    "report": "baseline-2.json",
+    "probesInDatabaseCreationOrder": [
+      {
+        "id": "d8890ff4-ea80-4244-8af6-af15f0df2f8e",
+        "priority": "low",
+        "status": "accepted",
+        "createdAt": "2026-11-20T20:29:56.854548+00:00",
+        "attempt": 1,
+        "channel": "sms",
+        "eventTopic": "notifications.low",
+        "eventType": "NotificationReady",
+        "probe": "idle"
+      },
+      {
+        "id": "85dd034c-3190-40e5-8aec-b6e25642d812",
+        "priority": "low",
+        "status": "accepted",
+        "createdAt": "2026-11-20T20:30:04.202247+00:00",
+        "attempt": 1,
+        "channel": "sms",
+        "eventTopic": "notifications.low",
+        "eventType": "NotificationReady",
+        "probe": "bulk"
+      },
+      {
+        "id": "31c5c84b-eb6c-4af3-a087-55d6c9a91067",
+        "priority": "low",
+        "status": "accepted",
+        "createdAt": "2026-11-20T20:30:04.206237+00:00",
+        "attempt": 1,
+        "channel": "sms",
+        "eventTopic": "notifications.low",
+        "eventType": "NotificationReady",
+        "probe": "single"
+      }
+    ]
+  },
+  {
+    "report": "candidate-1.json",
+    "probesInDatabaseCreationOrder": [
+      {
+        "id": "ffd2c523-8b44-4805-a7bf-7985aa2c76f7",
+        "priority": "low",
+        "status": "accepted",
+        "createdAt": "2026-11-20T20:27:54.572484+00:00",
+        "attempt": 1,
+        "channel": "sms",
+        "eventTopic": "notifications.normal",
+        "eventType": "NotificationReady",
+        "probe": "idle"
+      },
+      {
+        "id": "787c6cb8-932f-4230-975f-e7380f87966f",
+        "priority": "low",
+        "status": "accepted",
+        "createdAt": "2026-11-20T20:28:01.7804+00:00",
+        "attempt": 1,
+        "channel": "sms",
+        "eventTopic": "notifications.normal",
+        "eventType": "NotificationReady",
+        "probe": "single"
+      },
+      {
+        "id": "538ae267-412e-404e-9c8e-852c1e1f0d46",
+        "priority": "low",
+        "status": "accepted",
+        "createdAt": "2026-11-20T20:28:01.78408+00:00",
+        "attempt": 1,
+        "channel": "sms",
+        "eventTopic": "notifications.low",
+        "eventType": "NotificationReady",
+        "probe": "bulk"
+      }
+    ]
+  },
+  {
+    "report": "candidate-2.json",
+    "probesInDatabaseCreationOrder": [
+      {
+        "id": "59ac34ad-57fa-453c-b59b-7f49768ac334",
+        "priority": "low",
+        "status": "accepted",
+        "createdAt": "2026-11-20T20:32:06.824477+00:00",
+        "attempt": 1,
+        "channel": "sms",
+        "eventTopic": "notifications.normal",
+        "eventType": "NotificationReady",
+        "probe": "idle"
+      },
+      {
+        "id": "c46a1c38-74d1-49ef-a74e-db0a4099fc2f",
+        "priority": "low",
+        "status": "accepted",
+        "createdAt": "2026-11-20T20:32:14.929413+00:00",
+        "attempt": 1,
+        "channel": "sms",
+        "eventTopic": "notifications.low",
+        "eventType": "NotificationReady",
+        "probe": "bulk"
+      },
+      {
+        "id": "8fa20db7-34b8-4f73-8e75-8e86c4ba5c72",
+        "priority": "low",
+        "status": "accepted",
+        "createdAt": "2026-11-20T20:32:14.941153+00:00",
+        "attempt": 1,
+        "channel": "sms",
+        "eventTopic": "notifications.normal",
+        "eventType": "NotificationReady",
+        "probe": "single"
+      }
+    ]
+  }
+]

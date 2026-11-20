@@ -1,0 +1,54 @@
+{
+  "utc": "2026-11-20T20:32:06.694309+00:00",
+  "revision": "958508ca9470187354346d18118dd8c5527ea1d2",
+  "workerReplicas": 3,
+  "variant": "candidate",
+  "api": "http://127.0.0.1:18081",
+  "workerImage": "sha256:3b42f3b05cc46fbb32ddbea3cada2a4a66c0e38e806ac6522e78c3887c90a156",
+  "trials": [
+    {
+      "campaignDrainSec": 120.77276,
+      "campaignAccepted": 10000,
+      "probes": {
+        "idle": {
+          "createdAt": "2026-11-20T20:32:06.824477+00:00",
+          "acceptedAt": "2026-11-20T20:32:06.98505+00:00",
+          "queueMs": 136.95,
+          "sendMs": 23.623,
+          "totalMs": 160.573,
+          "campaignOutstandingAtCreate": 0,
+          "campaignStillOutstandingAtAcceptance": 0,
+          "id": "59ac34ad-57fa-453c-b59b-7f49768ac334",
+          "providerPosts": 1
+        },
+        "bulk": {
+          "createdAt": "2026-11-20T20:32:14.929413+00:00",
+          "acceptedAt": "2026-11-20T20:34:09.004556+00:00",
+          "queueMs": 114051.459,
+          "sendMs": 23.684,
+          "totalMs": 114075.143,
+          "campaignOutstandingAtCreate": 9498,
+          "campaignStillOutstandingAtAcceptance": 0,
+          "id": "c46a1c38-74d1-49ef-a74e-db0a4099fc2f",
+          "providerPosts": 1
+        },
+        "single": {
+          "createdAt": "2026-11-20T20:32:14.941153+00:00",
+          "acceptedAt": "2026-11-20T20:32:15.104287+00:00",
+          "queueMs": 139.112,
+          "sendMs": 24.022,
+          "totalMs": 163.134,
+          "campaignOutstandingAtCreate": 9498,
+          "campaignStillOutstandingAtAcceptance": 9483,
+          "id": "8fa20db7-34b8-4f73-8e75-8e86c4ba5c72",
+          "providerPosts": 1
+        }
+      },
+      "loadedProviderPosts": 10002,
+      "order": [
+        "bulk",
+        "single"
+      ]
+    }
+  ]
+}
