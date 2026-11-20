@@ -47,6 +47,8 @@ jobs:
           go-version-file: go.mod
       - name: Verify poison-record quarantine and subsequent delivery on an isolated Kafka broker
         run: make quarantine RESULTS=.local/ci
+      - name: Verify worker shutdown during a provider acknowledgement
+        run: make drain RESULTS=.local/ci
       - run: make integration
       - name: Exercise a bounded burst against the local synthetic provider
         run: make burst RESULTS=.local/ci LOAD_FLAGS="-total 300 -batch 100"
