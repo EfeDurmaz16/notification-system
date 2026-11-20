@@ -9,7 +9,9 @@ info:
     receipts are outside the provider protocol. All timestamps use RFC 3339.
     Supply X-Correlation-ID with 1 to 128 visible ASCII characters to reuse a
     request correlation ID. The server otherwise generates and returns one.
-    Create operations accept JSON bodies up to 5 MiB.
+    Create operations accept UTF-8 JSON bodies up to 5 MiB. Property names
+    are case-sensitive. Duplicate keys, unpaired Unicode surrogate escapes
+    and nesting deeper than 64 levels return HTTP 400.
 servers:
   - url: /
 tags:

@@ -68,6 +68,7 @@ The client create key identifies API intent. The provider key identifies a singl
 
 | Command | Scope |
 |---|---|
+| `make verify-all` | Full local suite including benchmarks, load matrix and isolated fault tests. [Verification guide](docs/verification.md) |
 | `make check` | Formatting, vet, unit tests, race detector, binary build |
 | `make ci` | Local checks, Compose, database integration tests and end-to-end smoke |
 | `make burst`, `make load`, `make stress`, `make failures` | Independent local traffic and failure experiments |

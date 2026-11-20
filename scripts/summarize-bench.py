@@ -29,12 +29,16 @@ for path, data in reports:
     counts = ", ".join(f"{k}={v}" for k, v in sorted(data["finalObservedStates"].items()))
     checks = [k for k, ok in data["checks"].items() if not ok]
     errors = data.get("errors", [])
+    audit = data.get("receiptAudit")
+    audit_note = (f" {audit['checked']} individual IDs audited after the timed run: "
+                  f"{audit['zeroPosts']} missing, {audit['multiplePosts']} repeated, "
+                  f"{audit['readErrors']} audit read errors.") if audit else ""
     print(f"- **{path.stem}**: {counts or 'no states observed'}. "
           f"Provider accepted {data['provider']['accepted']}, rejected {data['provider']['failures']}, "
           f"lost responses {data['provider']['responseLost']}. "
           f"Outstanding at deadline {data['notObservedTerminal']}. "
           f"Failed checks: {', '.join(checks) or 'none'}."
-          + (f" Errors: {'; '.join(errors)}." if errors else ""))
+          + audit_note + (f" Errors: {'; '.join(errors)}." if errors else ""))
 print("\n## Method\n")
 print("- The 1,000-item burst is one request, so its API percentiles describe that single call. "
       "The 10,000-item burst is ten simultaneous batches of 1,000. Replica counts are recorded in each JSON file.")

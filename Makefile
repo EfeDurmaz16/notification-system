@@ -11,13 +11,14 @@ TEST_DATABASE_URL ?= postgres://notify:notify@127.0.0.1:$(or $(POSTGRES_PORT),54
 RESULTS ?= .local/results
 LOAD_FLAGS ?=
 
-.PHONY: help fmt lint test race build check up down smoke integration ci performance burst load stress mixed failures package openapi contract
+.PHONY: help fmt lint test race build check up down smoke integration ci performance burst load stress mixed failures package openapi contract matrix recovery crash verify-all
 
 help:
 	@printf '%s\n' 'make check        Format check, vet, unit tests, race detector, binaries' \
 		'make up / down    Start / stop Compose without deleting data' \
 		'make integration  Start Compose, run database integration tests and HTTP smoke test' \
 		'make ci           Run the local functional CI suite' \
+		'make verify-all   Run CI, benchmarks, all traffic and recovery experiments' \
 		'make performance  Benchmark isolated code paths, report time and allocations' \
 		'make burst/load/stress/mixed/failures  Run one experiment on the local stack' \
 		'make package      Package committed sources and matching native binaries in dist/'
@@ -72,6 +73,24 @@ performance:
 burst load stress mixed failures:
 	mkdir -p "$(RESULTS)"
 	$(GO) run ./cmd/loadtest -scenario $@ -api "$(API_URL)" -provider "$(MOCK_PROVIDER_URL)" -out "$(RESULTS)/$@.json" $(LOAD_FLAGS)
+
+matrix:
+	PROVIDER_URL=http://provider:8081/send PROVIDER_IDEMPOTENT=false API_URL="$(API_URL)" MOCK_PROVIDER_URL="$(MOCK_PROVIDER_URL)" RESULTS="$(RESULTS)/matrix" ./scripts/bench.sh
+
+recovery:
+	python3 scripts/recovery.py --build --report "$(RESULTS)/recovery.json"
+
+crash:
+	python3 scripts/recovery.py --build --crash --report "$(RESULTS)/crash.json"
+
+# Sequence measurements to avoid competing load and failure injections on the same host.
+verify-all:
+	mkdir -p "$(RESULTS)"
+	set -o pipefail; $(MAKE) ci 2>&1 | tee "$(RESULTS)/ci.txt"
+	$(MAKE) performance
+	$(MAKE) matrix
+	$(MAKE) recovery
+	$(MAKE) crash
 
 package:
 	./scripts/package.sh
