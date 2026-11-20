@@ -1,0 +1,22 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/EfeDurmaz16/notification-system/cmd/provider
+cpu: Apple M5 Pro
+BenchmarkWindowAccounting-18    	62058398	        17.58 ns/op	      47 B/op	       0 allocs/op
+BenchmarkWindowAccounting-18    	100000000	        12.39 ns/op	      47 B/op	       0 allocs/op
+BenchmarkWindowAccounting-18    	100000000	        11.97 ns/op	      47 B/op	       0 allocs/op
+BenchmarkWindowAccounting-18    	100000000	        12.68 ns/op	      47 B/op	       0 allocs/op
+BenchmarkWindowAccounting-18    	100000000	        12.20 ns/op	      47 B/op	       0 allocs/op
+PASS
+ok  	github.com/EfeDurmaz16/notification-system/cmd/provider	6.253s
+goos: darwin
+goarch: arm64
+pkg: github.com/EfeDurmaz16/notification-system/cmd/loadtest
+cpu: Apple M5 Pro
+BenchmarkPercentiles1000-18    	  108898	     11459 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPercentiles1000-18    	  109018	     10104 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPercentiles1000-18    	  124696	      9678 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPercentiles1000-18    	  125893	      9695 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPercentiles1000-18    	  124807	     11243 ns/op	       0 B/op	       0 allocs/op
+PASS
+ok  	github.com/EfeDurmaz16/notification-system/cmd/loadtest	6.423s
