@@ -1,0 +1,1374 @@
+{
+  "trial": "b2",
+  "image": "sha256:1709c6c0043557cf1693cacf3ea128def3c0964336c6554679f94b2593103faf",
+  "workerConcurrency": 24,
+  "providerLatencyMs": 20,
+  "campaignSMS": 4000,
+  "idle": {
+    "push": {
+      "batch": {
+        "n": 24,
+        "p50Ms": 139.304,
+        "p95Ms": 217.233,
+        "p99Ms": 232.046
+      },
+      "single": {
+        "n": 24,
+        "p50Ms": 147.356,
+        "p95Ms": 213.705,
+        "p99Ms": 220.452
+      }
+    },
+    "probes": [
+      {
+        "lane": "batch",
+        "pair": 1,
+        "id": "673491ad-9845-4843-80f7-c479e96c0d6c",
+        "partition": 1,
+        "offset": 2704,
+        "precedingCampaignSMS": 0,
+        "createToClaimMs": 77.479,
+        "claimToAcceptMs": 23.828,
+        "latencyMs": 101.307,
+        "precedingSMSUnclaimedAtPushCreation": 0
+      },
+      {
+        "lane": "single",
+        "pair": 1,
+        "id": "420af7d0-02ee-40d9-a22e-59492f86c9f9",
+        "partition": 2,
+        "offset": 36,
+        "precedingCampaignSMS": 0,
+        "createToClaimMs": 87.912,
+        "claimToAcceptMs": 23.864,
+        "latencyMs": 111.776,
+        "precedingSMSUnclaimedAtPushCreation": 0
+      },
+      {
+        "lane": "single",
+        "pair": 2,
+        "id": "a9cd2b0e-9f23-4917-9fe9-ad9d5303c9f5",
+        "partition": 2,
+        "offset": 37,
+        "precedingCampaignSMS": 0,
+        "createToClaimMs": 93.23,
+        "claimToAcceptMs": 26.453,
+        "latencyMs": 119.683,
+        "precedingSMSUnclaimedAtPushCreation": 0
+      },
+      {
+        "lane": "batch",
+        "pair": 2,
+        "id": "89d250c5-b5fd-4a76-9923-e5f7a7e4fd39",
+        "partition": 2,
+        "offset": 2651,
+        "precedingCampaignSMS": 0,
+        "createToClaimMs": 81.486,
+        "claimToAcceptMs": 25.817,
+        "latencyMs": 107.303,
+        "precedingSMSUnclaimedAtPushCreation": 0
+      },
+      {
+        "lane": "batch",
+        "pair": 3,
+        "id": "06fc30f4-b160-4bb3-89fc-4a70e64bae78",
+        "partition": 2,
+        "offset": 2652,
+        "precedingCampaignSMS": 0,
+        "createToClaimMs": 193.574,
+        "claimToAcceptMs": 23.659,
+        "latencyMs": 217.233,
+        "precedingSMSUnclaimedAtPushCreation": 0
+      },
+      {
+        "lane": "single",
+        "pair": 3,
+        "id": "1e5a7e12-c2cd-443b-9627-b9daa93841ab",
+        "partition": 0,
+        "offset": 35,
+        "precedingCampaignSMS": 0,
+        "createToClaimMs": 182.648,
+        "claimToAcceptMs": 23.61,
+        "latencyMs": 206.258,
+        "precedingSMSUnclaimedAtPushCreation": 0
+      },
+      {
+        "lane": "single",
+        "pair": 4,
+        "id": "2caf2e05-e025-43fd-8459-ef3541ed9e4d",
+        "partition": 0,
+        "offset": 36,
+        "precedingCampaignSMS": 0,
+        "createToClaimMs": 96.898,
+        "claimToAcceptMs": 22.616,
+        "latencyMs": 119.514,
+        "precedingSMSUnclaimedAtPushCreation": 0
+      },
+      {
+        "lane": "batch",
+        "pair": 4,
+        "id": "01d9e60d-9537-4e48-968b-c57ead25fa21",
+        "partition": 0,
+        "offset": 2760,
+        "precedingCampaignSMS": 0,
+        "createToClaimMs": 86.564,
+        "claimToAcceptMs": 24.395,
+        "latencyMs": 110.959,
+        "precedingSMSUnclaimedAtPushCreation": 0
+      },
+      {
+        "lane": "batch",
+        "pair": 5,
+        "id": "a5cd6ff7-3489-4017-9448-c157422bf99f",
+        "partition": 1,
+        "offset": 2705,
+        "precedingCampaignSMS": 0,
+        "createToClaimMs": 209.113,
+        "claimToAcceptMs": 22.933,
+        "latencyMs": 232.046,
+        "precedingSMSUnclaimedAtPushCreation": 0
+      },
+      {
+        "lane": "single",
+        "pair": 5,
+        "id": "e6f6f06a-4ba5-4090-86cf-f38fa59374a3",
+        "partition": 0,
+        "offset": 37,
+        "precedingCampaignSMS": 0,
+        "createToClaimMs": 196.57,
+        "claimToAcceptMs": 23.882,
+        "latencyMs": 220.452,
+        "precedingSMSUnclaimedAtPushCreation": 0
+      },
+      {
+        "lane": "single",
+        "pair": 6,
+        "id": "5f1df473-3570-4085-9291-58f76efa9e99",
+        "partition": 1,
+        "offset": 28,
+        "precedingCampaignSMS": 0,
+        "createToClaimMs": 102.759,
+        "claimToAcceptMs": 23.002,
+        "latencyMs": 125.761,
+        "precedingSMSUnclaimedAtPushCreation": 0
+      },
+      {
+        "lane": "batch",
+        "pair": 6,
+        "id": "b96eda1a-16e5-436c-a838-5bce0414a646",
+        "partition": 1,
+        "offset": 2706,
+        "precedingCampaignSMS": 0,
+        "createToClaimMs": 112.664,
+        "claimToAcceptMs": 25.628,
+        "latencyMs": 138.292,
+        "precedingSMSUnclaimedAtPushCreation": 0
+      },
+      {
+        "lane": "batch",
+        "pair": 7,
+        "id": "e1654b72-e3fd-48f8-b41b-0c57b4061b23",
+        "partition": 2,
+        "offset": 2653,
+        "precedingCampaignSMS": 0,
+        "createToClaimMs": 109.798,
+        "claimToAcceptMs": 22.761,
+        "latencyMs": 132.559,
+        "precedingSMSUnclaimedAtPushCreation": 0
+      },
+      {
+        "lane": "single",
+        "pair": 7,
+        "id": "af112dbd-fe8f-4aba-b9d0-e33d3dc214ca",
+        "partition": 2,
+        "offset": 38,
+        "precedingCampaignSMS": 0,
+        "createToClaimMs": 120.214,
+        "claimToAcceptMs": 23.524,
+        "latencyMs": 143.738,
+        "precedingSMSUnclaimedAtPushCreation": 0
+      },
+      {
+        "lane": "single",
+        "pair": 8,
+        "id": "b94cc45c-0a57-44d9-949d-c3e8aab666bc",
+        "partition": 2,
+        "offset": 39,
+        "precedingCampaignSMS": 0,
+        "createToClaimMs": 127.963,
+        "claimToAcceptMs": 27.119,
+        "latencyMs": 155.082,
+        "precedingSMSUnclaimedAtPushCreation": 0
+      },
+      {
+        "lane": "batch",
+        "pair": 8,
+        "id": "78286613-4c0b-434c-8ecc-658a6789cc67",
+        "partition": 0,
+        "offset": 2761,
+        "precedingCampaignSMS": 0,
+        "createToClaimMs": 115.881,
+        "claimToAcceptMs": 23.423,
+        "latencyMs": 139.304,
+        "precedingSMSUnclaimedAtPushCreation": 0
+      },
+      {
+        "lane": "batch",
+        "pair": 9,
+        "id": "fff3953e-ee0d-462b-8aef-0dc34995f026",
+        "partition": 1,
+        "offset": 2707,
+        "precedingCampaignSMS": 0,
+        "createToClaimMs": 133.217,
+        "claimToAcceptMs": 24.031,
+        "latencyMs": 157.248,
+        "precedingSMSUnclaimedAtPushCreation": 0
+      },
+      {
+        "lane": "single",
+        "pair": 9,
+        "id": "98a19a0a-511f-41bf-85dc-67c0c46135d0",
+        "partition": 1,
+        "offset": 29,
+        "precedingCampaignSMS": 0,
+        "createToClaimMs": 122.444,
+        "claimToAcceptMs": 23.501,
+        "latencyMs": 145.945,
+        "precedingSMSUnclaimedAtPushCreation": 0
+      },
+      {
+        "lane": "single",
+        "pair": 10,
+        "id": "63033aa3-54ca-49e6-bcb8-0363b988488a",
+        "partition": 0,
+        "offset": 38,
+        "precedingCampaignSMS": 0,
+        "createToClaimMs": 141.156,
+        "claimToAcceptMs": 25.06,
+        "latencyMs": 166.216,
+        "precedingSMSUnclaimedAtPushCreation": 0
+      },
+      {
+        "lane": "batch",
+        "pair": 10,
+        "id": "9f24d7c2-83d7-4690-85ba-0c3313e47a0f",
+        "partition": 2,
+        "offset": 2654,
+        "precedingCampaignSMS": 0,
+        "createToClaimMs": 128.208,
+        "claimToAcceptMs": 23.978,
+        "latencyMs": 152.186,
+        "precedingSMSUnclaimedAtPushCreation": 0
+      },
+      {
+        "lane": "batch",
+        "pair": 11,
+        "id": "f0145671-c755-4f02-b6b7-a4716c7dec51",
+        "partition": 0,
+        "offset": 2762,
+        "precedingCampaignSMS": 0,
+        "createToClaimMs": 138.382,
+        "claimToAcceptMs": 23.179,
+        "latencyMs": 161.561,
+        "precedingSMSUnclaimedAtPushCreation": 0
+      },
+      {
+        "lane": "single",
+        "pair": 11,
+        "id": "83bda0d5-1899-45c2-854e-7b56a471dbac",
+        "partition": 0,
+        "offset": 39,
+        "precedingCampaignSMS": 0,
+        "createToClaimMs": 150.164,
+        "claimToAcceptMs": 23.056,
+        "latencyMs": 173.22,
+        "precedingSMSUnclaimedAtPushCreation": 0
+      },
+      {
+        "lane": "single",
+        "pair": 12,
+        "id": "446bd03b-5043-471d-b091-40a640bc530f",
+        "partition": 1,
+        "offset": 30,
+        "precedingCampaignSMS": 0,
+        "createToClaimMs": 147.126,
+        "claimToAcceptMs": 23.662,
+        "latencyMs": 170.788,
+        "precedingSMSUnclaimedAtPushCreation": 0
+      },
+      {
+        "lane": "batch",
+        "pair": 12,
+        "id": "bae48fd0-f6f4-44e1-ae0a-36ad26bb0819",
+        "partition": 0,
+        "offset": 2763,
+        "precedingCampaignSMS": 0,
+        "createToClaimMs": 154.958,
+        "claimToAcceptMs": 23.402,
+        "latencyMs": 178.36,
+        "precedingSMSUnclaimedAtPushCreation": 0
+      },
+      {
+        "lane": "batch",
+        "pair": 13,
+        "id": "639e3718-5df3-4990-9114-bebe50fc0909",
+        "partition": 0,
+        "offset": 2764,
+        "precedingCampaignSMS": 0,
+        "createToClaimMs": 148.975,
+        "claimToAcceptMs": 24.371,
+        "latencyMs": 173.346,
+        "precedingSMSUnclaimedAtPushCreation": 0
+      },
+      {
+        "lane": "single",
+        "pair": 13,
+        "id": "2a696f03-131a-4483-a581-10cf4f0b3285",
+        "partition": 1,
+        "offset": 31,
+        "precedingCampaignSMS": 0,
+        "createToClaimMs": 160.815,
+        "claimToAcceptMs": 24.314,
+        "latencyMs": 185.129,
+        "precedingSMSUnclaimedAtPushCreation": 0
+      },
+      {
+        "lane": "single",
+        "pair": 14,
+        "id": "87dd1c4c-2e98-4a57-9d94-22310d9e0aa4",
+        "partition": 1,
+        "offset": 32,
+        "precedingCampaignSMS": 0,
+        "createToClaimMs": 153.832,
+        "claimToAcceptMs": 23.476,
+        "latencyMs": 177.308,
+        "precedingSMSUnclaimedAtPushCreation": 0
+      },
+      {
+        "lane": "batch",
+        "pair": 14,
+        "id": "fb2536c8-cb0d-44ec-8d25-e5936f0e882e",
+        "partition": 2,
+        "offset": 2655,
+        "precedingCampaignSMS": 0,
+        "createToClaimMs": 165.622,
+        "claimToAcceptMs": 23.619,
+        "latencyMs": 189.241,
+        "precedingSMSUnclaimedAtPushCreation": 0
+      },
+      {
+        "lane": "batch",
+        "pair": 15,
+        "id": "573a6efb-b56e-44a1-a256-125acab97ad4",
+        "partition": 0,
+        "offset": 2765,
+        "precedingCampaignSMS": 0,
+        "createToClaimMs": 61.496,
+        "claimToAcceptMs": 24.817,
+        "latencyMs": 86.313,
+        "precedingSMSUnclaimedAtPushCreation": 0
+      },
+      {
+        "lane": "single",
+        "pair": 15,
+        "id": "20bd2a14-5dad-46a1-aaa1-c64cb896e985",
+        "partition": 1,
+        "offset": 33,
+        "precedingCampaignSMS": 0,
+        "createToClaimMs": 74.578,
+        "claimToAcceptMs": 23.502,
+        "latencyMs": 98.08,
+        "precedingSMSUnclaimedAtPushCreation": 0
+      },
+      {
+        "lane": "single",
+        "pair": 16,
+        "id": "a463558b-f4db-466a-9ecc-99dc2f8dcd2b",
+        "partition": 1,
+        "offset": 34,
+        "precedingCampaignSMS": 0,
+        "createToClaimMs": 188.568,
+        "claimToAcceptMs": 25.137,
+        "latencyMs": 213.705,
+        "precedingSMSUnclaimedAtPushCreation": 0
+      },
+      {
+        "lane": "batch",
+        "pair": 16,
+        "id": "6f12d7a3-5836-4289-b7cf-3b06cadfbd75",
+        "partition": 2,
+        "offset": 2656,
+        "precedingCampaignSMS": 0,
+        "createToClaimMs": 175.901,
+        "claimToAcceptMs": 24.264,
+        "latencyMs": 200.165,
+        "precedingSMSUnclaimedAtPushCreation": 0
+      },
+      {
+        "lane": "batch",
+        "pair": 17,
+        "id": "16f8de28-65f9-4ae3-86e2-0bb2fd7219e9",
+        "partition": 0,
+        "offset": 2766,
+        "precedingCampaignSMS": 0,
+        "createToClaimMs": 97.802,
+        "claimToAcceptMs": 22.259,
+        "latencyMs": 120.061,
+        "precedingSMSUnclaimedAtPushCreation": 0
+      },
+      {
+        "lane": "single",
+        "pair": 17,
+        "id": "54b69f89-833a-43ca-93fb-442e48563d36",
+        "partition": 1,
+        "offset": 35,
+        "precedingCampaignSMS": 0,
+        "createToClaimMs": 85.06,
+        "claimToAcceptMs": 26.519,
+        "latencyMs": 111.579,
+        "precedingSMSUnclaimedAtPushCreation": 0
+      },
+      {
+        "lane": "single",
+        "pair": 18,
+        "id": "7ac72fbe-298b-442c-8d07-fafce2da21f4",
+        "partition": 1,
+        "offset": 36,
+        "precedingCampaignSMS": 0,
+        "createToClaimMs": 187.252,
+        "claimToAcceptMs": 24.635,
+        "latencyMs": 211.887,
+        "precedingSMSUnclaimedAtPushCreation": 0
+      },
+      {
+        "lane": "batch",
+        "pair": 18,
+        "id": "7aa33376-e566-4497-887d-2a4a13b7c7c5",
+        "partition": 0,
+        "offset": 2767,
+        "precedingCampaignSMS": 0,
+        "createToClaimMs": 180.594,
+        "claimToAcceptMs": 24.174,
+        "latencyMs": 204.768,
+        "precedingSMSUnclaimedAtPushCreation": 0
+      },
+      {
+        "lane": "batch",
+        "pair": 19,
+        "id": "84be8976-5d76-4dc9-9f24-e4b763f00465",
+        "partition": 2,
+        "offset": 2657,
+        "precedingCampaignSMS": 0,
+        "createToClaimMs": 108.351,
+        "claimToAcceptMs": 22.63,
+        "latencyMs": 130.981,
+        "precedingSMSUnclaimedAtPushCreation": 0
+      },
+      {
+        "lane": "single",
+        "pair": 19,
+        "id": "d0c80f01-379a-4481-b208-61a2ec833d2b",
+        "partition": 1,
+        "offset": 37,
+        "precedingCampaignSMS": 0,
+        "createToClaimMs": 96.537,
+        "claimToAcceptMs": 23.686,
+        "latencyMs": 120.223,
+        "precedingSMSUnclaimedAtPushCreation": 0
+      },
+      {
+        "lane": "single",
+        "pair": 20,
+        "id": "6ed82bea-4c57-4fe1-abe5-dd4a4a037474",
+        "partition": 1,
+        "offset": 38,
+        "precedingCampaignSMS": 0,
+        "createToClaimMs": 104.452,
+        "claimToAcceptMs": 23.783,
+        "latencyMs": 128.235,
+        "precedingSMSUnclaimedAtPushCreation": 0
+      },
+      {
+        "lane": "batch",
+        "pair": 20,
+        "id": "34955f36-c1e5-4f68-8a08-3c0ef6734a34",
+        "partition": 1,
+        "offset": 2708,
+        "precedingCampaignSMS": 0,
+        "createToClaimMs": 114.437,
+        "claimToAcceptMs": 23.823,
+        "latencyMs": 138.26,
+        "precedingSMSUnclaimedAtPushCreation": 0
+      },
+      {
+        "lane": "batch",
+        "pair": 21,
+        "id": "f69a3814-2662-4c46-8fd8-c7ea34f3cb60",
+        "partition": 0,
+        "offset": 2768,
+        "precedingCampaignSMS": 0,
+        "createToClaimMs": 111.951,
+        "claimToAcceptMs": 24.509,
+        "latencyMs": 136.46,
+        "precedingSMSUnclaimedAtPushCreation": 0
+      },
+      {
+        "lane": "single",
+        "pair": 21,
+        "id": "6678e158-fbe7-4000-b216-807094618eed",
+        "partition": 1,
+        "offset": 39,
+        "precedingCampaignSMS": 0,
+        "createToClaimMs": 122.734,
+        "claimToAcceptMs": 24.622,
+        "latencyMs": 147.356,
+        "precedingSMSUnclaimedAtPushCreation": 0
+      },
+      {
+        "lane": "single",
+        "pair": 22,
+        "id": "26115daa-3c62-43f1-b0e4-21ee1884b23e",
+        "partition": 0,
+        "offset": 40,
+        "precedingCampaignSMS": 0,
+        "createToClaimMs": 123.418,
+        "claimToAcceptMs": 23.43,
+        "latencyMs": 146.848,
+        "precedingSMSUnclaimedAtPushCreation": 0
+      },
+      {
+        "lane": "batch",
+        "pair": 22,
+        "id": "6709fcc9-8a81-4505-a6ee-75c2aca96723",
+        "partition": 0,
+        "offset": 2769,
+        "precedingCampaignSMS": 0,
+        "createToClaimMs": 111.862,
+        "claimToAcceptMs": 23.515,
+        "latencyMs": 135.377,
+        "precedingSMSUnclaimedAtPushCreation": 0
+      },
+      {
+        "lane": "batch",
+        "pair": 23,
+        "id": "a246e0b0-82b9-4293-8651-450313fbe23c",
+        "partition": 0,
+        "offset": 2770,
+        "precedingCampaignSMS": 0,
+        "createToClaimMs": 118.385,
+        "claimToAcceptMs": 23.756,
+        "latencyMs": 142.141,
+        "precedingSMSUnclaimedAtPushCreation": 0
+      },
+      {
+        "lane": "single",
+        "pair": 23,
+        "id": "06b45555-4bc5-477f-a14a-fe8f51052ece",
+        "partition": 2,
+        "offset": 40,
+        "precedingCampaignSMS": 0,
+        "createToClaimMs": 128.824,
+        "claimToAcceptMs": 24.628,
+        "latencyMs": 153.452,
+        "precedingSMSUnclaimedAtPushCreation": 0
+      },
+      {
+        "lane": "single",
+        "pair": 24,
+        "id": "26412a24-f966-4c2a-b5e8-8aa9c4edf560",
+        "partition": 0,
+        "offset": 41,
+        "precedingCampaignSMS": 0,
+        "createToClaimMs": 134.855,
+        "claimToAcceptMs": 23.922,
+        "latencyMs": 158.777,
+        "precedingSMSUnclaimedAtPushCreation": 0
+      },
+      {
+        "lane": "batch",
+        "pair": 24,
+        "id": "6ac74dc8-aa13-4154-bb92-b8373587dd54",
+        "partition": 2,
+        "offset": 2658,
+        "precedingCampaignSMS": 0,
+        "createToClaimMs": 127.019,
+        "claimToAcceptMs": 24.236,
+        "latencyMs": 151.255,
+        "precedingSMSUnclaimedAtPushCreation": 0
+      }
+    ],
+    "cancelledIDs": [],
+    "receiptAudit": {
+      "checked": 48,
+      "statusAndPOSTs": {
+        "accepted/1": 48
+      }
+    },
+    "provider": {
+      "attempts": 48,
+      "accepted": 48,
+      "deduplicated": 0,
+      "failures": 0,
+      "responseLost": 0,
+      "channels": {
+        "push": {
+          "attempts": 48,
+          "peakPerSecond": 6
+        }
+      }
+    }
+  },
+  "loaded": {
+    "push": {
+      "batch": {
+        "n": 24,
+        "p50Ms": 36025.967,
+        "p95Ms": 46884.217,
+        "p99Ms": 47969.537
+      },
+      "single": {
+        "n": 24,
+        "p50Ms": 143.995,
+        "p95Ms": 202.098,
+        "p99Ms": 219.93
+      }
+    },
+    "probes": [
+      {
+        "lane": "batch",
+        "pair": 1,
+        "id": "659bf085-a4ff-46bb-ad60-86aab3bd7dfa",
+        "partition": 1,
+        "offset": 3997,
+        "precedingCampaignSMS": 1288,
+        "createToClaimMs": 16237.975,
+        "claimToAcceptMs": 22.115,
+        "latencyMs": 16260.09,
+        "precedingSMSUnclaimedAtPushCreation": 1256
+      },
+      {
+        "lane": "single",
+        "pair": 1,
+        "id": "20afd5a1-ae9f-4d3e-bdd4-b8534ad8f6d7",
+        "partition": 0,
+        "offset": 42,
+        "precedingCampaignSMS": 0,
+        "createToClaimMs": 96.713,
+        "claimToAcceptMs": 23.314,
+        "latencyMs": 120.027,
+        "precedingSMSUnclaimedAtPushCreation": 0
+      },
+      {
+        "lane": "single",
+        "pair": 2,
+        "id": "40ca0afc-e392-4026-ab4f-3f772affc229",
+        "partition": 0,
+        "offset": 43,
+        "precedingCampaignSMS": 0,
+        "createToClaimMs": 99.074,
+        "claimToAcceptMs": 21.818,
+        "latencyMs": 120.892,
+        "precedingSMSUnclaimedAtPushCreation": 0
+      },
+      {
+        "lane": "batch",
+        "pair": 2,
+        "id": "ed74e372-53d7-41a0-a336-5659efa66f2d",
+        "partition": 0,
+        "offset": 4084,
+        "precedingCampaignSMS": 1313,
+        "createToClaimMs": 47945.151,
+        "claimToAcceptMs": 24.386,
+        "latencyMs": 47969.537,
+        "precedingSMSUnclaimedAtPushCreation": 1272
+      },
+      {
+        "lane": "batch",
+        "pair": 3,
+        "id": "7d833c73-875a-451d-98c2-4294539b285b",
+        "partition": 1,
+        "offset": 4000,
+        "precedingCampaignSMS": 1288,
+        "createToClaimMs": 46857.849,
+        "claimToAcceptMs": 26.368,
+        "latencyMs": 46884.217,
+        "precedingSMSUnclaimedAtPushCreation": 1149
+      },
+      {
+        "lane": "single",
+        "pair": 3,
+        "id": "aae6d6b9-ea88-4eee-9955-7c6032e4b63d",
+        "partition": 1,
+        "offset": 40,
+        "precedingCampaignSMS": 0,
+        "createToClaimMs": 111.159,
+        "claimToAcceptMs": 25.254,
+        "latencyMs": 136.413,
+        "precedingSMSUnclaimedAtPushCreation": 0
+      },
+      {
+        "lane": "single",
+        "pair": 4,
+        "id": "35429d37-7196-483c-a448-374aa875d829",
+        "partition": 1,
+        "offset": 41,
+        "precedingCampaignSMS": 0,
+        "createToClaimMs": 124.355,
+        "claimToAcceptMs": 24.782,
+        "latencyMs": 149.137,
+        "precedingSMSUnclaimedAtPushCreation": 0
+      },
+      {
+        "lane": "batch",
+        "pair": 4,
+        "id": "5a0f25de-4c76-4fb7-93c6-d0cd510f6eff",
+        "partition": 0,
+        "offset": 4085,
+        "precedingCampaignSMS": 1313,
+        "createToClaimMs": 45957.894,
+        "claimToAcceptMs": 22.993,
+        "latencyMs": 45980.887,
+        "precedingSMSUnclaimedAtPushCreation": 1272
+      },
+      {
+        "lane": "batch",
+        "pair": 5,
+        "id": "d04320f5-7fb3-4d99-a35b-39e1ffb4a622",
+        "partition": 0,
+        "offset": 4086,
+        "precedingCampaignSMS": 1313,
+        "createToClaimMs": 44970.379,
+        "claimToAcceptMs": 23.316,
+        "latencyMs": 44993.695,
+        "precedingSMSUnclaimedAtPushCreation": 1272
+      },
+      {
+        "lane": "single",
+        "pair": 5,
+        "id": "598fef97-60a0-4c3f-a131-a7d193aa0f62",
+        "partition": 2,
+        "offset": 41,
+        "precedingCampaignSMS": 0,
+        "createToClaimMs": 148.666,
+        "claimToAcceptMs": 24.987,
+        "latencyMs": 173.653,
+        "precedingSMSUnclaimedAtPushCreation": 0
+      },
+      {
+        "lane": "single",
+        "pair": 6,
+        "id": "0f14b9ac-13bd-46e2-b6bf-7376b3920c2d",
+        "partition": 0,
+        "offset": 44,
+        "precedingCampaignSMS": 0,
+        "createToClaimMs": 165.742,
+        "claimToAcceptMs": 22.751,
+        "latencyMs": 188.493,
+        "precedingSMSUnclaimedAtPushCreation": 0
+      },
+      {
+        "lane": "batch",
+        "pair": 6,
+        "id": "1ef8d52f-f123-43b3-9776-4d6d3edae35e",
+        "partition": 0,
+        "offset": 4087,
+        "precedingCampaignSMS": 1313,
+        "createToClaimMs": 43978.862,
+        "claimToAcceptMs": 23.042,
+        "latencyMs": 44001.904,
+        "precedingSMSUnclaimedAtPushCreation": 1272
+      },
+      {
+        "lane": "batch",
+        "pair": 7,
+        "id": "f4fe2afd-dfcf-4890-b9b0-9a51b8cdf4bf",
+        "partition": 2,
+        "offset": 4058,
+        "precedingCampaignSMS": 1399,
+        "createToClaimMs": 43073.039,
+        "claimToAcceptMs": 22.99,
+        "latencyMs": 43096.029,
+        "precedingSMSUnclaimedAtPushCreation": 1363
+      },
+      {
+        "lane": "single",
+        "pair": 7,
+        "id": "db3233df-70c9-4980-b64a-126605991476",
+        "partition": 2,
+        "offset": 42,
+        "precedingCampaignSMS": 0,
+        "createToClaimMs": 87.176,
+        "claimToAcceptMs": 25.424,
+        "latencyMs": 112.6,
+        "precedingSMSUnclaimedAtPushCreation": 0
+      },
+      {
+        "lane": "single",
+        "pair": 8,
+        "id": "f0d7edf3-cfec-4753-a6da-0a2ccd20cdf4",
+        "partition": 1,
+        "offset": 42,
+        "precedingCampaignSMS": 0,
+        "createToClaimMs": 99.15,
+        "claimToAcceptMs": 24.053,
+        "latencyMs": 123.203,
+        "precedingSMSUnclaimedAtPushCreation": 0
+      },
+      {
+        "lane": "batch",
+        "pair": 8,
+        "id": "8f88a9e6-88ff-44c0-8fee-280c995f4ad8",
+        "partition": 1,
+        "offset": 4001,
+        "precedingCampaignSMS": 1288,
+        "createToClaimMs": 41873.275,
+        "claimToAcceptMs": 27.444,
+        "latencyMs": 41900.719,
+        "precedingSMSUnclaimedAtPushCreation": 743
+      },
+      {
+        "lane": "batch",
+        "pair": 9,
+        "id": "a3612fe0-a342-4ec9-b17d-e83f1510b76d",
+        "partition": 1,
+        "offset": 4002,
+        "precedingCampaignSMS": 1288,
+        "createToClaimMs": 40889.706,
+        "claimToAcceptMs": 25.414,
+        "latencyMs": 40915.12,
+        "precedingSMSUnclaimedAtPushCreation": 661
+      },
+      {
+        "lane": "single",
+        "pair": 9,
+        "id": "f0f44582-6ced-4ad6-bd0f-c1016a451174",
+        "partition": 2,
+        "offset": 43,
+        "precedingCampaignSMS": 0,
+        "createToClaimMs": 114.369,
+        "claimToAcceptMs": 22.103,
+        "latencyMs": 136.472,
+        "precedingSMSUnclaimedAtPushCreation": 0
+      },
+      {
+        "lane": "single",
+        "pair": 10,
+        "id": "edc668ea-36db-4268-8eca-7b96e6aacd8d",
+        "partition": 2,
+        "offset": 44,
+        "precedingCampaignSMS": 0,
+        "createToClaimMs": 132.428,
+        "claimToAcceptMs": 25.301,
+        "latencyMs": 157.729,
+        "precedingSMSUnclaimedAtPushCreation": 0
+      },
+      {
+        "lane": "batch",
+        "pair": 10,
+        "id": "0c4663a4-0b79-43e7-b7b2-a1843d546d56",
+        "partition": 2,
+        "offset": 4059,
+        "precedingCampaignSMS": 1399,
+        "createToClaimMs": 40083.373,
+        "claimToAcceptMs": 22.415,
+        "latencyMs": 40105.788,
+        "precedingSMSUnclaimedAtPushCreation": 1363
+      },
+      {
+        "lane": "batch",
+        "pair": 11,
+        "id": "0c9aa53b-aa43-4bd9-8b96-d01efa5c9853",
+        "partition": 1,
+        "offset": 4005,
+        "precedingCampaignSMS": 1288,
+        "createToClaimMs": 38915.11,
+        "claimToAcceptMs": 26.526,
+        "latencyMs": 38941.636,
+        "precedingSMSUnclaimedAtPushCreation": 524
+      },
+      {
+        "lane": "single",
+        "pair": 11,
+        "id": "29d0218e-3c57-47cf-bd87-abb098b62e55",
+        "partition": 1,
+        "offset": 43,
+        "precedingCampaignSMS": 0,
+        "createToClaimMs": 48.174,
+        "claimToAcceptMs": 27.091,
+        "latencyMs": 75.265,
+        "precedingSMSUnclaimedAtPushCreation": 0
+      },
+      {
+        "lane": "single",
+        "pair": 12,
+        "id": "04f7b935-2643-4a86-9b60-3d8b929fa2f8",
+        "partition": 0,
+        "offset": 45,
+        "precedingCampaignSMS": 0,
+        "createToClaimMs": 58.548,
+        "claimToAcceptMs": 22.777,
+        "latencyMs": 81.325,
+        "precedingSMSUnclaimedAtPushCreation": 0
+      },
+      {
+        "lane": "batch",
+        "pair": 12,
+        "id": "d4228539-18c4-4e10-8323-d6b3542f73c4",
+        "partition": 0,
+        "offset": 4088,
+        "precedingCampaignSMS": 1313,
+        "createToClaimMs": 37989.329,
+        "claimToAcceptMs": 22.167,
+        "latencyMs": 38011.496,
+        "precedingSMSUnclaimedAtPushCreation": 1272
+      },
+      {
+        "lane": "batch",
+        "pair": 13,
+        "id": "b1365f3b-d5c1-41a7-8bda-5a9e6a3d3bcc",
+        "partition": 2,
+        "offset": 4060,
+        "precedingCampaignSMS": 1399,
+        "createToClaimMs": 37092.857,
+        "claimToAcceptMs": 22.641,
+        "latencyMs": 37115.498,
+        "precedingSMSUnclaimedAtPushCreation": 1363
+      },
+      {
+        "lane": "single",
+        "pair": 13,
+        "id": "7d5a52e0-ffeb-4334-9651-5a93f5677364",
+        "partition": 2,
+        "offset": 45,
+        "precedingCampaignSMS": 0,
+        "createToClaimMs": 176.179,
+        "claimToAcceptMs": 23.638,
+        "latencyMs": 199.817,
+        "precedingSMSUnclaimedAtPushCreation": 0
+      },
+      {
+        "lane": "single",
+        "pair": 14,
+        "id": "19156f9d-0579-4194-804c-62d0222298fc",
+        "partition": 1,
+        "offset": 44,
+        "precedingCampaignSMS": 0,
+        "createToClaimMs": 194.671,
+        "claimToAcceptMs": 25.259,
+        "latencyMs": 219.93,
+        "precedingSMSUnclaimedAtPushCreation": 0
+      },
+      {
+        "lane": "batch",
+        "pair": 14,
+        "id": "1069a1ee-77be-4f1f-9c1a-dacdf8c6c11a",
+        "partition": 0,
+        "offset": 4089,
+        "precedingCampaignSMS": 1313,
+        "createToClaimMs": 36003.597,
+        "claimToAcceptMs": 22.37,
+        "latencyMs": 36025.967,
+        "precedingSMSUnclaimedAtPushCreation": 1272
+      },
+      {
+        "lane": "batch",
+        "pair": 15,
+        "id": "58a8bc64-cb75-49e0-8c16-181fe398be40",
+        "partition": 2,
+        "offset": 4061,
+        "precedingCampaignSMS": 1399,
+        "createToClaimMs": 35105.259,
+        "claimToAcceptMs": 23.225,
+        "latencyMs": 35128.484,
+        "precedingSMSUnclaimedAtPushCreation": 1363
+      },
+      {
+        "lane": "single",
+        "pair": 15,
+        "id": "03f7fd34-8ca8-4b67-b657-0f8894ac4ba0",
+        "partition": 0,
+        "offset": 46,
+        "precedingCampaignSMS": 0,
+        "createToClaimMs": 115.899,
+        "claimToAcceptMs": 24.504,
+        "latencyMs": 140.403,
+        "precedingSMSUnclaimedAtPushCreation": 0
+      },
+      {
+        "lane": "single",
+        "pair": 16,
+        "id": "68be9ba0-97f0-44d1-ae02-19993f98143f",
+        "partition": 2,
+        "offset": 46,
+        "precedingCampaignSMS": 0,
+        "createToClaimMs": 133.776,
+        "claimToAcceptMs": 23.442,
+        "latencyMs": 157.218,
+        "precedingSMSUnclaimedAtPushCreation": 0
+      },
+      {
+        "lane": "batch",
+        "pair": 16,
+        "id": "bf09f11b-3160-4673-bfa4-48fa5e4b12d7",
+        "partition": 0,
+        "offset": 4090,
+        "precedingCampaignSMS": 1313,
+        "createToClaimMs": 34013.308,
+        "claimToAcceptMs": 25.603,
+        "latencyMs": 34038.911,
+        "precedingSMSUnclaimedAtPushCreation": 1272
+      },
+      {
+        "lane": "batch",
+        "pair": 17,
+        "id": "3a7a85da-cfbc-4829-a995-5e8c4df714c0",
+        "partition": 2,
+        "offset": 4062,
+        "precedingCampaignSMS": 1399,
+        "createToClaimMs": 33116.762,
+        "claimToAcceptMs": 23.2,
+        "latencyMs": 33139.962,
+        "precedingSMSUnclaimedAtPushCreation": 1363
+      },
+      {
+        "lane": "single",
+        "pair": 17,
+        "id": "bae7b129-b12e-4399-a7fc-52631924d2df",
+        "partition": 0,
+        "offset": 47,
+        "precedingCampaignSMS": 0,
+        "createToClaimMs": 150.29,
+        "claimToAcceptMs": 21.935,
+        "latencyMs": 172.225,
+        "precedingSMSUnclaimedAtPushCreation": 0
+      },
+      {
+        "lane": "single",
+        "pair": 18,
+        "id": "22443af8-eadc-4fe8-8fa3-e76e45122a16",
+        "partition": 1,
+        "offset": 45,
+        "precedingCampaignSMS": 0,
+        "createToClaimMs": 165.16,
+        "claimToAcceptMs": 24.557,
+        "latencyMs": 189.717,
+        "precedingSMSUnclaimedAtPushCreation": 0
+      },
+      {
+        "lane": "batch",
+        "pair": 18,
+        "id": "c3fa4f20-c757-4c46-a6d5-95d5a7c796a1",
+        "partition": 0,
+        "offset": 4092,
+        "precedingCampaignSMS": 1313,
+        "createToClaimMs": 32035.536,
+        "claimToAcceptMs": 22.708,
+        "latencyMs": 32058.244,
+        "precedingSMSUnclaimedAtPushCreation": 1236
+      },
+      {
+        "lane": "batch",
+        "pair": 19,
+        "id": "b5993960-69b4-4cb1-bccc-0f73cb6c50cf",
+        "partition": 2,
+        "offset": 4063,
+        "precedingCampaignSMS": 1399,
+        "createToClaimMs": 31125.187,
+        "claimToAcceptMs": 22.552,
+        "latencyMs": 31147.739,
+        "precedingSMSUnclaimedAtPushCreation": 1363
+      },
+      {
+        "lane": "single",
+        "pair": 19,
+        "id": "9e715c6b-e8ed-4bff-9f1f-6f9bf9f054ea",
+        "partition": 0,
+        "offset": 48,
+        "precedingCampaignSMS": 0,
+        "createToClaimMs": 178.171,
+        "claimToAcceptMs": 23.527,
+        "latencyMs": 201.698,
+        "precedingSMSUnclaimedAtPushCreation": 0
+      },
+      {
+        "lane": "single",
+        "pair": 20,
+        "id": "e07cf67a-def9-4e03-b2b2-82b3b97c5eb2",
+        "partition": 0,
+        "offset": 49,
+        "precedingCampaignSMS": 0,
+        "createToClaimMs": 92.286,
+        "claimToAcceptMs": 23.958,
+        "latencyMs": 116.244,
+        "precedingSMSUnclaimedAtPushCreation": 0
+      },
+      {
+        "lane": "batch",
+        "pair": 20,
+        "id": "f38cb853-a757-4acd-affc-5bcf726c674f",
+        "partition": 0,
+        "offset": 4093,
+        "precedingCampaignSMS": 1313,
+        "createToClaimMs": 30048.476,
+        "claimToAcceptMs": 22.354,
+        "latencyMs": 30070.83,
+        "precedingSMSUnclaimedAtPushCreation": 1074
+      },
+      {
+        "lane": "batch",
+        "pair": 21,
+        "id": "a1d16a7a-8298-4ec3-aa6f-409dc38d7519",
+        "partition": 1,
+        "offset": 4007,
+        "precedingCampaignSMS": 1288,
+        "createToClaimMs": 28924.39,
+        "claimToAcceptMs": 26.85,
+        "latencyMs": 28951.24,
+        "precedingSMSUnclaimedAtPushCreation": 0
+      },
+      {
+        "lane": "single",
+        "pair": 21,
+        "id": "b586ad64-0fba-41d3-bd55-720be48e610c",
+        "partition": 2,
+        "offset": 47,
+        "precedingCampaignSMS": 0,
+        "createToClaimMs": 117.866,
+        "claimToAcceptMs": 26.129,
+        "latencyMs": 143.995,
+        "precedingSMSUnclaimedAtPushCreation": 0
+      },
+      {
+        "lane": "single",
+        "pair": 22,
+        "id": "314651bb-93f5-48ef-830c-618e062059bb",
+        "partition": 1,
+        "offset": 46,
+        "precedingCampaignSMS": 0,
+        "createToClaimMs": 125.527,
+        "claimToAcceptMs": 24.276,
+        "latencyMs": 149.803,
+        "precedingSMSUnclaimedAtPushCreation": 0
+      },
+      {
+        "lane": "batch",
+        "pair": 22,
+        "id": "c6dbbad5-af25-46f3-b51b-b48a36e7f483",
+        "partition": 2,
+        "offset": 4064,
+        "precedingCampaignSMS": 1399,
+        "createToClaimMs": 28138.711,
+        "claimToAcceptMs": 25.578,
+        "latencyMs": 28164.289,
+        "precedingSMSUnclaimedAtPushCreation": 1363
+      },
+      {
+        "lane": "batch",
+        "pair": 23,
+        "id": "359d4e5b-b4c3-4996-aaf4-dfdf818b9628",
+        "partition": 2,
+        "offset": 4065,
+        "precedingCampaignSMS": 1399,
+        "createToClaimMs": 27155.15,
+        "claimToAcceptMs": 25.426,
+        "latencyMs": 27180.576,
+        "precedingSMSUnclaimedAtPushCreation": 1363
+      },
+      {
+        "lane": "single",
+        "pair": 23,
+        "id": "e7ae287c-e243-4ac8-8d21-d386773ea33e",
+        "partition": 0,
+        "offset": 50,
+        "precedingCampaignSMS": 0,
+        "createToClaimMs": 55.659,
+        "claimToAcceptMs": 21.659,
+        "latencyMs": 77.318,
+        "precedingSMSUnclaimedAtPushCreation": 0
+      },
+      {
+        "lane": "single",
+        "pair": 24,
+        "id": "69115f45-b7f1-4b72-a443-9e66b8def4f6",
+        "partition": 2,
+        "offset": 48,
+        "precedingCampaignSMS": 0,
+        "createToClaimMs": 175.274,
+        "claimToAcceptMs": 26.824,
+        "latencyMs": 202.098,
+        "precedingSMSUnclaimedAtPushCreation": 0
+      },
+      {
+        "lane": "batch",
+        "pair": 24,
+        "id": "79601855-6f76-41ef-8cb3-a7d8c3351252",
+        "partition": 0,
+        "offset": 4094,
+        "precedingCampaignSMS": 1313,
+        "createToClaimMs": 26062.63,
+        "claimToAcceptMs": 23.345,
+        "latencyMs": 26085.975,
+        "precedingSMSUnclaimedAtPushCreation": 747
+      }
+    ],
+    "cancelledIDs": [
+      "629ae484-7742-43d6-98f0-63fab0eb2b3e",
+      "c0232b83-1c9d-4d92-91b5-fc7ea62505ba",
+      "39ac10ae-0ee0-48ac-b7f5-3e4cf5a0df2f",
+      "8b86d3c2-0bbc-435c-8ebe-2735043ae00a",
+      "00f84439-d910-42a1-ac66-494091dc6520",
+      "77f0fda4-7ada-4560-9271-0d280cbe5dac",
+      "8f3500cc-3570-4830-9123-4cf574db8239",
+      "2640f2ae-f88c-485b-b772-7238305c8cdb"
+    ],
+    "receiptAudit": {
+      "checked": 4056,
+      "statusAndPOSTs": {
+        "accepted/1": 4048,
+        "cancelled/0": 8
+      }
+    },
+    "provider": {
+      "attempts": 4048,
+      "accepted": 4048,
+      "deduplicated": 0,
+      "failures": 0,
+      "responseLost": 0,
+      "channels": {
+        "push": {
+          "attempts": 48,
+          "peakPerSecond": 23
+        },
+        "sms": {
+          "attempts": 4000,
+          "peakPerSecond": 86
+        }
+      }
+    },
+    "smsPostsPerSecondDuringProbes": 79.862,
+    "smsSamples": [
+      {
+        "s": 0.001,
+        "smsPosts": 53
+      },
+      {
+        "s": 1.007,
+        "smsPosts": 134
+      },
+      {
+        "s": 2.0071,
+        "smsPosts": 216
+      },
+      {
+        "s": 3.0048,
+        "smsPosts": 297
+      },
+      {
+        "s": 4.0037,
+        "smsPosts": 377
+      },
+      {
+        "s": 5.0043,
+        "smsPosts": 460
+      },
+      {
+        "s": 6.004,
+        "smsPosts": 541
+      },
+      {
+        "s": 7.0053,
+        "smsPosts": 622
+      },
+      {
+        "s": 8.004,
+        "smsPosts": 704
+      },
+      {
+        "s": 9.0039,
+        "smsPosts": 772
+      },
+      {
+        "s": 10.0042,
+        "smsPosts": 840
+      },
+      {
+        "s": 11.0065,
+        "smsPosts": 913
+      },
+      {
+        "s": 12.0051,
+        "smsPosts": 993
+      },
+      {
+        "s": 13.0035,
+        "smsPosts": 1073
+      },
+      {
+        "s": 14.0064,
+        "smsPosts": 1154
+      },
+      {
+        "s": 15.0062,
+        "smsPosts": 1235
+      },
+      {
+        "s": 16.0064,
+        "smsPosts": 1316
+      },
+      {
+        "s": 17.0071,
+        "smsPosts": 1400
+      },
+      {
+        "s": 18.0078,
+        "smsPosts": 1479
+      },
+      {
+        "s": 19.0062,
+        "smsPosts": 1563
+      },
+      {
+        "s": 20.0054,
+        "smsPosts": 1645
+      },
+      {
+        "s": 21.0062,
+        "smsPosts": 1725
+      },
+      {
+        "s": 22.0021,
+        "smsPosts": 1807
+      },
+      {
+        "s": 23.0033,
+        "smsPosts": 1890
+      }
+    ]
+  },
+  "sourceOffsetsAfterDrain": {
+    "notifications.normal/2": {
+      "committed": 4066,
+      "end": 4066
+    },
+    "notifications.normal/1": {
+      "committed": 4010,
+      "end": 4010
+    },
+    "notifications.normal/0": {
+      "committed": 4095,
+      "end": 4095
+    },
+    "notifications.normal.single/0": {
+      "committed": 51,
+      "end": 51
+    },
+    "notifications.normal.single/2": {
+      "committed": 49,
+      "end": 49
+    },
+    "notifications.normal.single/1": {
+      "committed": 47,
+      "end": 47
+    }
+  }
+}
