@@ -62,6 +62,7 @@ See the [standalone versus batch measurements](reports/ingress-share/README.md) 
 | Explicit permanent rejection, such as an invalid recipient (400) | Mark failed. |
 | Lost response, malformed acknowledgment, or ambiguous error | Record unknown for a webhook-style provider. Investigate by notification ID before deciding whether to send a new notification. |
 | Provider explicitly guarantees idempotency | Reuse the notification ID as the provider key. A bounded retry must fit inside the configured key-retention window. |
+| Worker receives SIGTERM during scale-down | Stop taking new work. Finish provider attempts already claimed in PostgreSQL within their original deadline, persist the outcome, and let another worker pick up uncommitted records. |
 | Worker disappears while sending | Recover stale sends after two minutes. A webhook-style provider leaves the outcome unknown; an idempotent provider may retry within its remaining attempt and time budget. |
 
 The client create key identifies API intent. The provider key identifies a single notification across attempts. The rate limiter tracks each attempt separately. Cancellation succeeds only before the first send right is acquired. The first-stage TDD transcripts are in [reports/tdd](reports/tdd).

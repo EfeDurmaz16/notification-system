@@ -52,12 +52,23 @@ type Engine struct {
 }
 
 // Send is called after the worker has obtained a shared channel permit.
+// A worker shutdown cancels an unclaimed job. A successful durable claim
+// gives this attempt the right to finish within its original deadline.
 func (e *Engine) Send(ctx context.Context, j Job) error {
 	ctx, end := observability.Delivery(ctx, j.Traceparent, j.ID)
 	defer end()
-	request, err := makeRequest(ctx, e.URL, j, e.Idempotent)
+	providerCtx := context.WithoutCancel(ctx)
+	if deadline, ok := ctx.Deadline(); ok {
+		var cancel context.CancelFunc
+		providerCtx, cancel = context.WithDeadline(providerCtx, deadline)
+		defer cancel()
+	}
+	request, err := makeRequest(providerCtx, e.URL, j, e.Idempotent)
 	if err != nil {
 		return fmt.Errorf("construct provider request: %w", err)
+	}
+	if err := ctx.Err(); err != nil {
+		return err
 	}
 	claimed, err := e.Store.Start(ctx, j.ID, j.Attempt)
 	if err != nil {
