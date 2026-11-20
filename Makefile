@@ -11,7 +11,7 @@ TEST_DATABASE_URL ?= postgres://notify:notify@127.0.0.1:$(or $(POSTGRES_PORT),54
 RESULTS ?= .local/results
 LOAD_FLAGS ?=
 
-.PHONY: help fmt lint test race build check up down smoke integration ci performance burst load stress failures package openapi contract
+.PHONY: help fmt lint test race build check up down smoke integration ci performance burst load stress mixed failures package openapi contract
 
 help:
 	@printf '%s\n' 'make check        Format check, vet, unit tests, race detector, binaries' \
@@ -19,7 +19,7 @@ help:
 		'make integration  Start Compose, run database integration tests and HTTP smoke test' \
 		'make ci           Run the local functional CI suite' \
 		'make performance  Benchmark isolated code paths, report time and allocations' \
-		'make burst/load/stress/failures  Run one experiment on the local stack' \
+		'make burst/load/stress/mixed/failures  Run one experiment on the local stack' \
 		'make package      Package committed sources and matching native binaries in dist/'
 
 fmt:
@@ -69,7 +69,7 @@ performance:
 	mkdir -p "$(RESULTS)"
 	set -o pipefail; $(GO) test -run '^$$' -bench . -benchmem -count=5 ./... | tee "$(RESULTS)/bench.txt"
 
-burst load stress failures:
+burst load stress mixed failures:
 	mkdir -p "$(RESULTS)"
 	$(GO) run ./cmd/loadtest -scenario $@ -api "$(API_URL)" -provider "$(MOCK_PROVIDER_URL)" -out "$(RESULTS)/$@.json" $(LOAD_FLAGS)
 

@@ -1,0 +1,192 @@
+{
+  "runId": "RF7FWK62EJ243LQPUNLKMXWHOY",
+  "config": {
+    "scenario": "burst",
+    "api": "http://127.0.0.1:18080",
+    "provider": "http://127.0.0.1:8090",
+    "offeredNotifications": 1000,
+    "notificationsPerRequest": 1000,
+    "baseOfferedNotificationsPerSecond": 0,
+    "maxInFlightCreates": 32,
+    "pollIntervalNs": 250000000,
+    "deadlineNs": 180000000000,
+    "label": "1 worker replicas"
+  },
+  "startedAt": "2026-11-20T19:38:34.847829Z",
+  "platform": "go1.26.4 darwin/arm64",
+  "startedCreateRequests": 1,
+  "createHTTPStatuses": {
+    "202": 1
+  },
+  "acceptedNotifications": 1000,
+  "validationRejected": 0,
+  "finalObservedStates": {
+    "accepted": 1000
+  },
+  "observedTerminal": 1000,
+  "notObservedTerminal": 0,
+  "createResponseLatency": {
+    "n": 1,
+    "p50Ms": 32.751875,
+    "p95Ms": 32.751875,
+    "p99Ms": 32.751875,
+    "maxMs": 32.751875
+  },
+  "generatorSchedulingDelay": {
+    "n": 1,
+    "p50Ms": 0.483,
+    "p95Ms": 0.483,
+    "p99Ms": 0.483,
+    "maxMs": 0.483
+  },
+  "createStartToObservedTerminal": {
+    "n": 1000,
+    "p50Ms": 7537.884875,
+    "p95Ms": 12538.881917,
+    "p99Ms": 13040.2315,
+    "maxMs": 13040.2315
+  },
+  "createStartToPersistedTerminalByPriority": {
+    "high": {
+      "n": 334,
+      "p50Ms": 7187.427,
+      "p95Ms": 12422.634,
+      "p99Ms": 12871.711,
+      "maxMs": 12938.696
+    },
+    "low": {
+      "n": 333,
+      "p50Ms": 7994.09,
+      "p95Ms": 12728.731,
+      "p99Ms": 12960.03,
+      "maxMs": 12999.047
+    },
+    "normal": {
+      "n": 333,
+      "p50Ms": 7033.982,
+      "p95Ms": 11445.716,
+      "p99Ms": 11898.145,
+      "maxMs": 12099.887
+    }
+  },
+  "createStartToPersistedTerminal": {
+    "n": 1000,
+    "p50Ms": 7289.607,
+    "p95Ms": 12408.156,
+    "p99Ms": 12880.976,
+    "maxMs": 12999.047
+  },
+  "pollErrors": 0,
+  "ingressSeconds": 0.033235,
+  "elapsedSeconds": 13.040845,
+  "secondsFromLastCreateResponseToFinalObservation": 13.007532917,
+  "apiAcceptedPerIngressSecond": 30088.761847449976,
+  "observedTerminalPerElapsedSecond": 76.682147514214,
+  "provider": {
+    "attempts": 1000,
+    "accepted": 1000,
+    "deduplicated": 0,
+    "failures": 0,
+    "responseLost": 0,
+    "channels": {
+      "sms": {
+        "attempts": 1000,
+        "peakPerSecond": 90
+      }
+    }
+  },
+  "timeline": [
+    {
+      "elapsedSeconds": 1.000194,
+      "apiAccepted": 1000,
+      "observedTerminal": 44,
+      "acceptedMinusObservedTerminal": 956
+    },
+    {
+      "elapsedSeconds": 2.001065,
+      "apiAccepted": 1000,
+      "observedTerminal": 82,
+      "acceptedMinusObservedTerminal": 918
+    },
+    {
+      "elapsedSeconds": 3.000861,
+      "apiAccepted": 1000,
+      "observedTerminal": 137,
+      "acceptedMinusObservedTerminal": 863
+    },
+    {
+      "elapsedSeconds": 4.001091,
+      "apiAccepted": 1000,
+      "observedTerminal": 209,
+      "acceptedMinusObservedTerminal": 791
+    },
+    {
+      "elapsedSeconds": 5.000222,
+      "apiAccepted": 1000,
+      "observedTerminal": 291,
+      "acceptedMinusObservedTerminal": 709
+    },
+    {
+      "elapsedSeconds": 6.000661,
+      "apiAccepted": 1000,
+      "observedTerminal": 372,
+      "acceptedMinusObservedTerminal": 628
+    },
+    {
+      "elapsedSeconds": 7.00049,
+      "apiAccepted": 1000,
+      "observedTerminal": 458,
+      "acceptedMinusObservedTerminal": 542
+    },
+    {
+      "elapsedSeconds": 8.000674,
+      "apiAccepted": 1000,
+      "observedTerminal": 542,
+      "acceptedMinusObservedTerminal": 458
+    },
+    {
+      "elapsedSeconds": 9.001114,
+      "apiAccepted": 1000,
+      "observedTerminal": 632,
+      "acceptedMinusObservedTerminal": 368
+    },
+    {
+      "elapsedSeconds": 10.001121,
+      "apiAccepted": 1000,
+      "observedTerminal": 719,
+      "acceptedMinusObservedTerminal": 281
+    },
+    {
+      "elapsedSeconds": 11.001122,
+      "apiAccepted": 1000,
+      "observedTerminal": 807,
+      "acceptedMinusObservedTerminal": 193
+    },
+    {
+      "elapsedSeconds": 12.001156,
+      "apiAccepted": 1000,
+      "observedTerminal": 895,
+      "acceptedMinusObservedTerminal": 105
+    },
+    {
+      "elapsedSeconds": 13.001137,
+      "apiAccepted": 1000,
+      "observedTerminal": 981,
+      "acceptedMinusObservedTerminal": 19
+    },
+    {
+      "elapsedSeconds": 13.040845,
+      "apiAccepted": 1000,
+      "observedTerminal": 1000,
+      "acceptedMinusObservedTerminal": 0
+    }
+  ],
+  "checks": {
+    "allInputsAccepted": true,
+    "allReachedTerminal": true,
+    "expectedAcceptedState": true,
+    "fixtureStatsAvailable": true,
+    "oneProviderAttemptPerInput": true,
+    "providerRollingSecondWithinQuota": true
+  }
+}

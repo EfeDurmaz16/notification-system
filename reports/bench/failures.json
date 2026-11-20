@@ -1,0 +1,124 @@
+{
+  "runId": "K2UJCN4EVO7UWOYLK2O5XX75HM",
+  "config": {
+    "scenario": "failures",
+    "api": "http://127.0.0.1:18080",
+    "provider": "http://127.0.0.1:8090",
+    "offeredNotifications": 30,
+    "notificationsPerRequest": 10,
+    "baseOfferedNotificationsPerSecond": 20,
+    "maxInFlightCreates": 32,
+    "pollIntervalNs": 250000000,
+    "deadlineNs": 180000000000,
+    "label": "3 worker replicas"
+  },
+  "startedAt": "2026-11-20T19:39:27.349008Z",
+  "platform": "go1.26.4 darwin/arm64",
+  "startedCreateRequests": 3,
+  "createHTTPStatuses": {
+    "202": 3
+  },
+  "acceptedNotifications": 30,
+  "validationRejected": 0,
+  "finalObservedStates": {
+    "accepted": 10,
+    "failed": 10,
+    "unknown": 10
+  },
+  "observedTerminal": 30,
+  "notObservedTerminal": 0,
+  "createResponseLatency": {
+    "n": 3,
+    "p50Ms": 3.583667,
+    "p95Ms": 8.026167,
+    "p99Ms": 8.026167,
+    "maxMs": 8.026167
+  },
+  "generatorSchedulingDelay": {
+    "n": 3,
+    "p50Ms": 0.881,
+    "p95Ms": 1.199,
+    "p99Ms": 1.199,
+    "maxMs": 1.199
+  },
+  "createStartToObservedTerminal": {
+    "n": 30,
+    "p50Ms": 256.222083,
+    "p95Ms": 505.713708,
+    "p99Ms": 509.439125,
+    "maxMs": 509.439125
+  },
+  "createStartToPersistedTerminalByPriority": {
+    "high": {
+      "n": 10,
+      "p50Ms": 196.827,
+      "p95Ms": 252.529,
+      "p99Ms": 252.529,
+      "maxMs": 252.529
+    },
+    "low": {
+      "n": 10,
+      "p50Ms": 176.587,
+      "p95Ms": 262.592,
+      "p99Ms": 262.592,
+      "maxMs": 262.592
+    },
+    "normal": {
+      "n": 10,
+      "p50Ms": 155.121,
+      "p95Ms": 252.522,
+      "p99Ms": 252.522,
+      "maxMs": 252.522
+    }
+  },
+  "createStartToPersistedTerminal": {
+    "n": 30,
+    "p50Ms": 184.257,
+    "p95Ms": 261.167,
+    "p99Ms": 262.592,
+    "maxMs": 262.592
+  },
+  "pollErrors": 0,
+  "ingressSeconds": 1.004783,
+  "elapsedSeconds": 1.25743,
+  "secondsFromLastCreateResponseToFinalObservation": 0.252646083,
+  "apiAcceptedPerIngressSecond": 29.857193045662598,
+  "observedTerminalPerElapsedSecond": 23.85818693684738,
+  "provider": {
+    "attempts": 30,
+    "accepted": 20,
+    "deduplicated": 0,
+    "failures": 10,
+    "responseLost": 10,
+    "channels": {
+      "sms": {
+        "attempts": 30,
+        "peakPerSecond": 28
+      }
+    }
+  },
+  "timeline": [
+    {
+      "elapsedSeconds": 1.001035,
+      "apiAccepted": 20,
+      "observedTerminal": 19,
+      "acceptedMinusObservedTerminal": 1
+    },
+    {
+      "elapsedSeconds": 1.25743,
+      "apiAccepted": 30,
+      "observedTerminal": 30,
+      "acceptedMinusObservedTerminal": 0
+    }
+  ],
+  "checks": {
+    "allInputsAccepted": true,
+    "allReachedTerminal": true,
+    "ambiguousResponsesClassified": true,
+    "expectedAcceptedState": true,
+    "fixtureStatsAvailable": true,
+    "oneProviderAttemptPerInput": true,
+    "permanentFailuresClassified": true,
+    "providerRollingSecondWithinQuota": true
+  }
+}

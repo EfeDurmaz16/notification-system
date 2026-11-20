@@ -36,7 +36,8 @@ for path, data in reports:
           f"Failed checks: {', '.join(checks) or 'none'}."
           + (f" Errors: {'; '.join(errors)}." if errors else ""))
 print("\n## Method\n")
-print("- Burst cases offer a single 1,000-item batch. The deployment label records the worker replica count.")
+print("- The 1,000-item burst is one request, so its API percentiles describe that single call. "
+      "The 10,000-item burst is ten simultaneous batches of 1,000. Replica counts are recorded in each JSON file.")
 print("- Load cases submit batches at a fixed arrival rate; stress uses three equal-population stages "
       "at 1x, 2x, and 4x base rate. See scheduling delay in the JSON to identify generator lag.")
 print("- Terminal latency starts before the create request. Persisted latency ends at the "
@@ -47,3 +48,14 @@ print("- Peak SMS rate is calculated from every provider handler arrival, using 
       "accepts the synthetic unknown notifications, then deliberately loses their responses.")
 print("- Expired deadlines and quota violations remain visible in the raw reports. "
       "Queueing and timing from a local run do not establish production capacity.")
+print("\n## Queueing and priority\n")
+print("The largest observed backlog is sampled once per second and equals API acknowledgments minus client-observed "
+      "terminal states, including any work awaiting its next status poll. The latency columns use persisted terminal times.\n")
+print("| Experiment | Highest sampled backlog | High p95 ms | Normal p95 ms | Low p95 ms |")
+print("| --- | ---: | ---: | ---: | ---: |")
+for path, data in reports:
+    backlog = max((s["acceptedMinusObservedTerminal"] for s in data["timeline"]), default=0)
+    values = data.get("createStartToPersistedTerminalByPriority", {})
+    cells = [f"{values[p]['p95Ms']:.1f}" if p in values else "unavailable"
+             for p in ["high", "normal", "low"]]
+    print(f"| {path.stem} | {backlog} | {' | '.join(cells)} |")

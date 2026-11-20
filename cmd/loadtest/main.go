@@ -208,6 +208,17 @@ func (h *harness) observe(ctx context.Context, id string, start time.Time, expec
 		h.mu.Unlock()
 	}
 }
+func recipient(channel string, index int) string {
+	switch channel {
+	case "email":
+		return fmt.Sprintf("synthetic-%d@example.invalid", index)
+	case "push":
+		return fmt.Sprintf("local-device-%d", index)
+	default:
+		return fmt.Sprintf("+90555%07d", index%10000000)
+	}
+}
+
 func (h *harness) create(ctx context.Context, offset, n int, due time.Time, wg *sync.WaitGroup) {
 	rows := make([]notif, n)
 	for i := range rows {
@@ -221,7 +232,12 @@ func (h *harness) create(ctx context.Context, offset, n int, due time.Time, wg *
 				value = "[mock:unknown] " + value
 			}
 		}
-		rows[i] = notif{fmt.Sprintf("+90555%07d", idx%10000000), "sms", value, []string{"high", "normal", "low"}[idx%3]}
+		channel, priorityIndex := "sms", idx
+		if h.r.Config.Scenario == "mixed" {
+			channel = []string{"sms", "email", "push"}[idx%3]
+			priorityIndex = idx / 3
+		}
+		rows[i] = notif{recipient(channel, idx), channel, value, []string{"high", "normal", "low"}[priorityIndex%3]}
 	}
 	data, _ := json.Marshal(map[string]any{"notifications": rows})
 	start := time.Now()
@@ -369,13 +385,24 @@ func (h *harness) run(ctx context.Context) error {
 		h.r.Checks["ambiguousResponsesClassified"] = h.r.Statuses["unknown"] == c.Total/3
 	}
 	h.r.Checks["expectedAcceptedState"] = h.r.Statuses["accepted"] == expectedAccepted
-	h.r.Checks["providerRollingSecondWithinQuota"] = h.r.Provider.Channels["sms"].Peak <= 100 && err == nil
+	expectedChannels := map[string]int{"sms": c.Total}
+	if c.Scenario == "mixed" {
+		expectedChannels = map[string]int{"sms": (c.Total + 2) / 3, "email": (c.Total + 1) / 3, "push": c.Total / 3}
+	}
+	covered, withinQuota := true, true
+	for channel, want := range expectedChannels {
+		got := h.r.Provider.Channels[channel]
+		covered = covered && got.Attempts == want
+		withinQuota = withinQuota && got.Peak <= 100
+	}
+	h.r.Checks["expectedAttemptsPerChannel"] = covered
+	h.r.Checks["providerRollingSecondWithinQuota"] = covered && withinQuota && err == nil
 	return ctx.Err()
 }
 func run() int {
 	var c config
 	var output string
-	flag.StringVar(&c.Scenario, "scenario", "burst", "burst, load, stress, or failures")
+	flag.StringVar(&c.Scenario, "scenario", "burst", "burst, load, stress, failures, or mixed")
 	flag.StringVar(&c.API, "api", "http://127.0.0.1:8080", "API URL")
 	flag.StringVar(&c.Provider, "provider", "http://127.0.0.1:8090", "isolated mock provider URL, stats are reset")
 	flag.IntVar(&c.Total, "total", 0, "total notifications")
@@ -387,50 +414,26 @@ func run() int {
 	flag.StringVar(&c.Label, "label", "", "deployment configuration/replica label")
 	flag.StringVar(&output, "out", "", "optional pretty JSON output file")
 	flag.Parse()
-	switch c.Scenario {
-	case "load":
-		if c.Total == 0 {
-			c.Total = 600
-		}
-		if c.Batch == 0 {
-			c.Batch = 10
-		}
-		if c.Rate < 0 {
-			c.Rate = 50
-		}
-	case "stress":
-		if c.Total == 0 {
-			c.Total = 1200
-		}
-		if c.Batch == 0 {
-			c.Batch = 20
-		}
-		if c.Rate < 0 {
-			c.Rate = 75
-		}
-	case "burst":
-		if c.Total == 0 {
-			c.Total = 1000
-		}
-		if c.Batch == 0 {
-			c.Batch = 1000
-		}
-		if c.Rate < 0 {
-			c.Rate = 0
-		}
-	case "failures":
-		if c.Total == 0 {
-			c.Total = 30
-		}
-		if c.Batch == 0 {
-			c.Batch = 10
-		}
-		if c.Rate < 0 {
-			c.Rate = 20
-		}
-	default:
+	defaults, ok := map[string]struct {
+		total int
+		batch int
+		rate  float64
+	}{
+		"load": {600, 10, 50}, "stress": {1200, 20, 75}, "burst": {1000, 1000, 0},
+		"failures": {30, 10, 20}, "mixed": {3000, 300, 0},
+	}[c.Scenario]
+	if !ok {
 		fmt.Fprintln(os.Stderr, "invalid scenario")
 		return 2
+	}
+	if c.Total == 0 {
+		c.Total = defaults.total
+	}
+	if c.Batch == 0 {
+		c.Batch = defaults.batch
+	}
+	if c.Rate == -1 {
+		c.Rate = defaults.rate
 	}
 	if c.Total < 1 || c.Batch < 1 || c.Batch > 1000 || c.Poll <= 0 || c.Concurrency < 1 || c.Deadline <= 0 || math.IsNaN(c.Rate) || math.IsInf(c.Rate, 0) || c.Rate < 0 {
 		fmt.Fprintln(os.Stderr, "invalid workload configuration")

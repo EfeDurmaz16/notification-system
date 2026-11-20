@@ -48,6 +48,7 @@ run_test load load 3
 run_test stress stress 3
 run_test failures failures 3
 run_test burst-10000 burst 3 -total 10000 -batch 1000 -deadline 10m
+run_test mixed mixed 3
 python3 scripts/summarize-bench.py "$results" > "$results/summary.md"
 cat "$results/summary.md"
 exit "$exit_code"
