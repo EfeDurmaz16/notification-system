@@ -68,7 +68,7 @@ services:
     entrypoint: [bash, -euc]
     command:
       - |
-        for tier in high normal low; do
+        for tier in high normal low high.single normal.single low.single; do
           /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic notifications.$$tier --partitions 3 --replication-factor 1
         done
         /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic notifications.invalid --partitions 1 --replication-factor 1
@@ -146,6 +146,7 @@ services:
     environment:
       <<: *app-env
       WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-24}
+      BATCH_SHARE_PERCENT: ${BATCH_SHARE_PERCENT:-20}
 
   provider:
     <<: *app

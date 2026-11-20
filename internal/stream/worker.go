@@ -18,11 +18,14 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+const DefaultBatchSharePercent = 20
+
 type Config struct {
-	Brokers   []string
-	Group     string
-	RedisAddr string
-	Workers   int
+	BatchSharePercent int
+	Brokers           []string
+	Group             string
+	RedisAddr         string
+	Workers           int
 }
 
 type Store interface {
@@ -67,8 +70,28 @@ func decode(data []byte) (event, error) {
 
 const batchBudget = 105 * time.Second
 
-// Keep the low-only window large enough to fill the pool at the default
-// concurrency. The upper bound limits replay exposure during a rebalance.
+type ingressLane int
+
+const (
+	bulkLane ingressLane = iota
+	singleLane
+)
+
+type route struct {
+	class int
+	lane  ingressLane
+}
+
+func (r route) suffix() string {
+	name := priorities[r.class]
+	if r.lane == singleLane {
+		return name + ".single"
+	}
+	return name
+}
+
+// The per-reader cap limits replay exposure. A lone lane can use the full
+// priority window once its polls show that workers are draining it quickly.
 func pollLimit(workers, class int) int {
 	places := 0
 	for _, p := range weighted {
@@ -77,6 +100,32 @@ func pollLimit(workers, class int) int {
 		}
 	}
 	return places * min(workers, 24)
+}
+
+type pollWindow struct {
+	size int
+	cap  int
+}
+
+func (r route) window(workers, batchPercent int) pollWindow {
+	capacity := pollLimit(workers, r.class)
+	share := batchPercent
+	if r.lane == singleLane {
+		share = 100 - share
+	}
+	return pollWindow{size: max(1, capacity*share/100), cap: capacity}
+}
+
+func (w *pollWindow) observe(records int, elapsed time.Duration) {
+	// Aim well inside the 65s admission budget. If a small-share reader
+	// drains slowly, holding fewer offsets avoids replaying the whole poll.
+	const target = 8 * time.Second
+	switch {
+	case elapsed > target:
+		w.size = max(1, min(w.size, int(time.Duration(records)*target/elapsed)))
+	case records == w.size && elapsed < target/2:
+		w.size = min(w.cap, w.size*2)
+	}
 }
 
 type task struct {
@@ -91,43 +140,161 @@ type outcome struct {
 }
 
 type batch struct {
-	class int
+	route
 	tasks []task
+	more  bool
+}
+
+const (
+	refillGrace     = 2 * time.Second
+	admissionBudget = batchBudget - 40*time.Second
+	ageThreshold    = 30 * time.Second
+)
+
+type priorityQueue struct {
+	lanes       [2][]task
+	more        [2]bool
+	refillUntil [2]time.Time
+	lastServed  [2]time.Time
+	batchCredit int
+}
+
+func (q *priorityQueue) agingAt(lane ingressLane) time.Time {
+	jobs := q.lanes[lane]
+	if len(jobs) == 0 || jobs[0].admitBy.IsZero() {
+		return time.Time{}
+	}
+	start := jobs[0].admitBy.Add(-admissionBudget)
+	if q.lastServed[lane].After(start) {
+		start = q.lastServed[lane]
+	}
+	return start.Add(ageThreshold)
+}
+
+// Decide without mutating state: a new Kafka poll may arrive before a free
+// worker. Credit advances only when an actual task leaves this priority.
+func (q *priorityQueue) next(batchPercent int, now time.Time) (lane ingressLane, nextCredit int, ready bool) {
+	singleReady, bulkReady := len(q.lanes[singleLane]) != 0, len(q.lanes[bulkLane]) != 0
+	if !singleReady && !q.refillUntil[singleLane].After(now) {
+		return bulkLane, 0, bulkReady
+	}
+	if !bulkReady && !q.refillUntil[bulkLane].After(now) {
+		return singleLane, 0, singleReady
+	}
+	if singleReady && bulkReady {
+		// At very low provider throughput, waiting 100 class opportunities
+		// for a 1% batch share can outlast a healthy Kafka poll's deadline.
+		bulkAge, singleAge := q.agingAt(bulkLane), q.agingAt(singleLane)
+		if !bulkAge.IsZero() && !bulkAge.After(now) && (singleAge.IsZero() || bulkAge.Before(singleAge)) {
+			return bulkLane, 0, true
+		}
+		if !singleAge.IsZero() && !singleAge.After(now) {
+			return singleLane, q.batchCredit, true
+		}
+	}
+
+	credit := q.batchCredit + batchPercent
+	if credit >= 100 {
+		return bulkLane, credit - 100, bulkReady
+	}
+	return singleLane, credit, singleReady
+}
+
+func (q *priorityQueue) enqueue(b batch) {
+	q.lanes[b.lane] = append(q.lanes[b.lane], b.tasks...)
+	q.more[b.lane] = b.more
+	q.refillUntil[b.lane] = time.Time{}
+}
+
+func (q *priorityQueue) dispatched(lane ingressLane, credit int, now time.Time) {
+	jobs := q.lanes[lane]
+	jobs[0] = task{}
+	q.lanes[lane] = jobs[1:]
+	q.lastServed[lane] = now
+	q.batchCredit = credit
+	if len(jobs) == 1 && q.more[lane] {
+		// The broker reports more offsets behind this poll. Give its reader
+		// time to finish outstanding sends, commit, and refill. A disconnected
+		// reader cannot hold its sibling past the grace interval.
+		q.refillUntil[lane] = now.Add(refillGrace)
+	}
 }
 
 type scheduler struct {
-	queues [3][]task
-	cursor int
+	queues       [len(priorities)]priorityQueue
+	cursor       int
+	batchPercent int
 }
 
-func (s *scheduler) next() (class, index int, available bool) {
-	for n := range len(weighted) {
-		i := (s.cursor + n) % len(weighted)
-		if class := weighted[i]; len(s.queues[class]) > 0 {
-			return class, i, true
+// Expired tasks must replay without spending a worker slot or advancing any
+// fairness cursor. Wake for refill/aging/deadline transitions even if no new
+// poll arrives while the scheduler is waiting for an available worker.
+func (s *scheduler) prepare(now time.Time) time.Time {
+	var wake time.Time
+	consider := func(at time.Time) {
+		if at.After(now) && (wake.IsZero() || at.Before(wake)) {
+			wake = at
 		}
 	}
-	return 0, 0, false
+	for p := range s.queues {
+		q := &s.queues[p]
+		for _, lane := range [...]ingressLane{singleLane, bulkLane} {
+			jobs := q.lanes[lane]
+			for len(jobs) > 0 && !jobs[0].admitBy.IsZero() && !jobs[0].admitBy.After(now) {
+				t := jobs[0]
+				t.result <- outcome{record: t.record, err: context.DeadlineExceeded}
+				jobs[0] = task{}
+				jobs = jobs[1:]
+			}
+			q.lanes[lane] = jobs
+			if len(jobs) > 0 {
+				consider(jobs[0].admitBy)
+				consider(q.agingAt(lane))
+			}
+			consider(q.refillUntil[lane])
+		}
+	}
+	return wake
+}
+
+func (s *scheduler) next(now time.Time) (chosen route, cursor, credit int, ready bool) {
+	for n := range len(weighted) {
+		i := (s.cursor + n) % len(weighted)
+		class := weighted[i]
+		lane, nextCredit, ok := s.queues[class].next(s.batchPercent, now)
+		if ok {
+			return route{class, lane}, (i + 1) % len(weighted), nextCredit, true
+		}
+	}
+	return route{}, 0, 0, false
 }
 
 func (s *scheduler) run(ctx context.Context, in <-chan batch, out chan<- task) {
+	timer := time.NewTimer(time.Hour)
+	defer timer.Stop()
 	for {
+		now := time.Now()
+		var tick <-chan time.Time
+		if wake := s.prepare(now); !wake.IsZero() {
+			timer.Reset(time.Until(wake))
+			tick = timer.C
+		}
 		var ready chan<- task
 		var selected task
-		class, i, ok := s.next()
+		chosen, cursor, credit, ok := s.next(now)
 		if ok {
 			ready = out
-			selected = s.queues[class][0]
+			selected = s.queues[chosen.class].lanes[chosen.lane][0]
 		}
 		select {
 		case <-ctx.Done():
 			return
+		case <-tick:
 		case b := <-in:
-			s.queues[b.class] = append(s.queues[b.class], b.tasks...)
+			s.queues[b.class].enqueue(b)
 		case ready <- selected:
-			s.queues[class][0] = task{}
-			s.queues[class] = s.queues[class][1:]
-			s.cursor = (i + 1) % len(weighted)
+			s.queues[chosen.class].dispatched(chosen.lane, credit, time.Now())
+			s.cursor = cursor
 		}
 	}
 }
@@ -139,13 +306,23 @@ func Run(ctx context.Context, cfg Config, store Store, sender Sender) error {
 	if len(cfg.Brokers) == 0 || cfg.Group == "" || cfg.RedisAddr == "" || cfg.Workers < 1 {
 		return errors.New("missing stream brokers, group, Redis address or workers")
 	}
+	if cfg.BatchSharePercent == 0 {
+		cfg.BatchSharePercent = DefaultBatchSharePercent
+	}
+	if cfg.BatchSharePercent < 1 || cfg.BatchSharePercent > 49 {
+		return errors.New("batch dispatch share must be from 1 to 49 percent")
+	}
 	rdb := redis.NewClient(&redis.Options{Addr: cfg.RedisAddr, MaxRetries: -1, ContextTimeoutEnabled: true})
 	defer rdb.Close()
 	limit := limiter{client: rdb, prefix: "notifications:quota:"}
 	group, ctx := errgroup.WithContext(ctx)
 	input := make(chan batch)
 	ready := make(chan task)
-	group.Go(func() error { var s scheduler; s.run(ctx, input, ready); return nil })
+	group.Go(func() error {
+		s := scheduler{batchPercent: cfg.BatchSharePercent}
+		s.run(ctx, input, ready)
+		return nil
+	})
 	for range cfg.Workers {
 		group.Go(func() error {
 			for {
@@ -159,7 +336,9 @@ func Run(ctx context.Context, cfg Config, store Store, sender Sender) error {
 		})
 	}
 	for p := range priorities {
-		group.Go(func() error { return consume(ctx, cfg, p, input) })
+		for _, lane := range [...]ingressLane{bulkLane, singleLane} {
+			group.Go(func() error { return consume(ctx, cfg, route{p, lane}, input) })
+		}
 	}
 	return group.Wait()
 }
@@ -193,18 +372,19 @@ func process(ctx context.Context, store Store, sender Sender, limit limiter, e e
 	return err
 }
 
-func consume(ctx context.Context, cfg Config, class int, in chan<- batch) error {
-	topic := "notifications." + priorities[class]
+func consume(ctx context.Context, cfg Config, r route, in chan<- batch) error {
+	topic := "notifications." + r.suffix()
+	window := r.window(cfg.Workers, cfg.BatchSharePercent)
 	for ctx.Err() == nil {
 		client, err := kgo.NewClient(
-			kgo.SeedBrokers(cfg.Brokers...), kgo.ConsumerGroup(cfg.Group+"."+priorities[class]),
+			kgo.SeedBrokers(cfg.Brokers...), kgo.ConsumerGroup(cfg.Group+"."+r.suffix()),
 			kgo.ConsumeTopics(topic), kgo.DisableAutoCommit(), kgo.BlockRebalanceOnPoll(),
 			kgo.FetchMaxWait(25*time.Millisecond), kgo.RebalanceTimeout(2*time.Minute),
 		)
 		if err != nil {
 			return fmt.Errorf("configure %s: %w", topic, err)
 		}
-		err = consumeBatches(ctx, client, class, in, pollLimit(cfg.Workers, class))
+		err = consumeBatches(ctx, client, r, in, &window)
 		client.CloseAllowingRebalance()
 		if ctx.Err() != nil {
 			return nil
@@ -217,9 +397,9 @@ func consume(ctx context.Context, cfg Config, class int, in chan<- batch) error 
 	return nil
 }
 
-func consumeBatches(ctx context.Context, client *kgo.Client, class int, in chan<- batch, batchSize int) error {
+func consumeBatches(ctx context.Context, client *kgo.Client, r route, in chan<- batch, window *pollWindow) error {
 	for {
-		fetches := client.PollRecords(ctx, batchSize)
+		fetches := client.PollRecords(ctx, window.size)
 		if errs := fetches.Errors(); len(errs) > 0 {
 			return errs[0].Err
 		}
@@ -228,22 +408,36 @@ func consumeBatches(ctx context.Context, client *kgo.Client, class int, in chan<
 			client.AllowRebalance()
 			continue
 		}
-		err := processBatch(ctx, client, class, in, records)
+		start := time.Now()
+		more := false
+		fetches.EachPartition(func(p kgo.FetchTopicPartition) {
+			if n := len(p.Records); n > 0 && p.Records[n-1].Offset+1 < p.HighWatermark {
+				more = true
+			}
+		})
+		err := processBatch(ctx, client, r, in, records, more)
 		if err != nil {
+			if errors.Is(err, context.DeadlineExceeded) {
+				// Retry a single offset first when the admission window expires.
+				// Keep this window across reconnects to avoid replaying a large
+				// group of already-processed offsets on each deadline.
+				window.size = 1
+			}
 			return err
 		}
+		window.observe(len(records), time.Since(start))
 		client.AllowRebalance()
 	}
 }
 
 // Bound time spent holding a group generation. Stop new dispatch admissions
 // early enough to finish the bounded provider call before the commit deadline.
-func processBatch(parent context.Context, client *kgo.Client, class int, in chan<- batch, records []*kgo.Record) error {
+func processBatch(parent context.Context, client *kgo.Client, source route, in chan<- batch, records []*kgo.Record, more bool) error {
 	deadline := time.Now().Add(batchBudget)
 	ctx, cancel := context.WithDeadline(parent, deadline)
 	defer cancel()
 	results := make(chan outcome, len(records))
-	b := batch{class: class}
+	b := batch{route: source, more: more}
 	for _, r := range records {
 		e, err := decode(r.Value)
 		if err != nil {

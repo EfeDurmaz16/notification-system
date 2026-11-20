@@ -114,6 +114,20 @@ func TestWorkflow(t *testing.T) {
 		t.Fatal("replayed batch should produce exactly one provider POST")
 	}
 	t.Log("verified zero actual POSTs for cancelled ID and exactly one for replayed accepted ID")
+
+	for _, priority := range []string{"low", "normal", "high"} {
+		t.Run("single_"+priority, func(t *testing.T) {
+			body := fmt.Sprintf(`{"recipient":"+12025550111","channel":"sms","priority":%q,"content":"Standalone integration check"}`, priority)
+			var single createResult
+			call(t, client, "POST", api+"/v1/notifications", key+"-"+priority, body, 202, &single)
+			state := awaitStatus(t, client, api+"/v1/notifications/"+single.ID, "accepted")
+			var stats struct{ Attempts int }
+			call(t, client, "GET", provider+"/stats/"+single.ID, "", "", 200, &stats)
+			if state.MessageID == "" || stats.Attempts != 1 {
+				t.Fatalf("single %s: messageId=%q provider attempts=%d, want 1", priority, state.MessageID, stats.Attempts)
+			}
+		})
+	}
 }
 
 func awaitStatus(t *testing.T, client *http.Client, url, want string) notification {
