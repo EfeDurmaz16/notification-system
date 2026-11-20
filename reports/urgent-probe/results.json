@@ -1,0 +1,107 @@
+{
+  "utc": "2026-11-20T20:09:55.603805+00:00",
+  "revision": "e6b22643cf03ddfb0159de5999d542a3275e629b",
+  "workerReplicas": 3,
+  "workerImage": "sha256:3b42f3b05cc46fbb32ddbea3cada2a4a66c0e38e806ac6522e78c3887c90a156",
+  "trials": [
+    {
+      "trial": 1,
+      "campaignOutstandingAtProbeCreate": 9499,
+      "campaignStillAcceptedLaterThanHigh": 9459,
+      "campaignLastMinusProbeCreateSec": 108.059448,
+      "probes": {
+        "idle": {
+          "status": "accepted",
+          "queueMs": 107.733,
+          "sendMs": 27.07,
+          "totalMs": 134.803,
+          "id": "9235b908-22e1-4e36-83e9-d2d61f9c4afa",
+          "posts": 1
+        },
+        "high": {
+          "status": "accepted",
+          "queueMs": 441.72,
+          "sendMs": 23.13,
+          "totalMs": 464.85,
+          "id": "3f653018-b84d-446f-a568-567c2cd709bd",
+          "posts": 1
+        },
+        "low": {
+          "status": "accepted",
+          "queueMs": 107755.519,
+          "sendMs": 25.491,
+          "totalMs": 107781.01,
+          "id": "b151866b-67ea-4eda-b971-82f69658f54a",
+          "posts": 1
+        }
+      },
+      "postCountDuringLoadedPhase": 10002
+    },
+    {
+      "trial": 2,
+      "campaignOutstandingAtProbeCreate": 9501,
+      "campaignStillAcceptedLaterThanHigh": 9488,
+      "campaignLastMinusProbeCreateSec": 111.839201,
+      "probes": {
+        "idle": {
+          "status": "accepted",
+          "queueMs": 50.514,
+          "sendMs": 28.767,
+          "totalMs": 79.281,
+          "id": "f8056203-5650-446e-b46f-cc8e185b8247",
+          "posts": 1
+        },
+        "high": {
+          "status": "accepted",
+          "queueMs": 129.818,
+          "sendMs": 21.594,
+          "totalMs": 151.412,
+          "id": "892d151b-46a2-455f-bd1b-42ea906eb135",
+          "posts": 1
+        },
+        "low": {
+          "status": "accepted",
+          "queueMs": 108801.303,
+          "sendMs": 23.229,
+          "totalMs": 108824.532,
+          "id": "9eb26e10-c662-4329-997a-f9851261f083",
+          "posts": 1
+        }
+      },
+      "postCountDuringLoadedPhase": 10002
+    },
+    {
+      "trial": 3,
+      "campaignOutstandingAtProbeCreate": 9497,
+      "campaignStillAcceptedLaterThanHigh": 9411,
+      "campaignLastMinusProbeCreateSec": 114.995333,
+      "probes": {
+        "idle": {
+          "status": "accepted",
+          "queueMs": 85.228,
+          "sendMs": 22.766,
+          "totalMs": 107.994,
+          "id": "61b7c148-712d-4433-bc28-61cf768a3042",
+          "posts": 1
+        },
+        "high": {
+          "status": "accepted",
+          "queueMs": 975.684,
+          "sendMs": 24.461,
+          "totalMs": 1000.145,
+          "id": "557c8eef-877b-458e-bea4-20d0b70da7c0",
+          "posts": 1
+        },
+        "low": {
+          "status": "accepted",
+          "queueMs": 114106.967,
+          "sendMs": 22.176,
+          "totalMs": 114129.143,
+          "id": "66f23f27-8e11-4fb4-9418-218af8c85e25",
+          "posts": 1
+        }
+      },
+      "postCountDuringLoadedPhase": 10002
+    }
+  ]
+}
