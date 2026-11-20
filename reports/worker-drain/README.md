@@ -14,6 +14,10 @@ Six normal-priority SMS were admitted while the only worker was offline. The tes
 
 With the fix, the interrupted ID had the same message ID before and after replacement. The provider accepted all six distinct notifications in each run. All three source partitions had zero lag by the end. An empty partition may have no committed offset. The JSON files include the worker image digest, all notification IDs, provider POST counts and source offsets. The test uses a non-idempotent fixture with a response delay shorter than the five-second HTTP timeout.
 
+## Scale-down with a backlog
+
+The [original traffic wave](../traffic-wave/scripted.json) and the [repeat after the fix](scripted.json) each offered 12,250 SMS across seven 25-second phases, scaling workers from one to three and back to one. In the original run, the provider received one POST for every ID, but one notification ended in `unknown`. In the repeat, all 12,250 IDs ended in `accepted`, each had exactly one provider POST, and all three source partitions drained. The six-ID experiment above isolates the shutdown race. The larger wave checks the outcome under load. Other local work overlapped with the repeat, so the latency difference cannot be attributed to this change.
+
 ## Reproduce
 
 ```sh
