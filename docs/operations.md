@@ -42,6 +42,7 @@ All worker replicas in a deployment must use the same database, Kafka cluster, c
 | `KAFKA_BROKERS`, `KAFKA_GROUP` | Comma-separated Kafka bootstrap servers and delivery consumer group prefix. |
 | `REDIS_ADDR` | Shared rate limiter in host:port form. |
 | `WORKER_CONCURRENCY` | Total active worker slots in one replica. Compose starts with 24. |
+| `BATCH_ROUTING` | Compose defaults to `channel` and the binary alone defaults to `shared`. Use `dual-read` during migration. See the [routing guide](channel-batch-routing.md). |
 | `BATCH_SHARE_PERCENT` | Batch dispatch share from 1 to 49 within a priority when both lanes have work ready on a replica. The initial default is 20. Use the same setting on all workers. |
 | `PROVIDER_URL` | Worker submission URL. Compose defaults to the local synthetic HTTP service. |
 | `PROVIDER_IDEMPOTENT`, `PROVIDER_KEY_WINDOW` | Default false, window default 24h. Enable only with a confirmed provider contract and set its actual key-retention interval. |
@@ -49,10 +50,12 @@ All worker replicas in a deployment must use the same database, Kafka cluster, c
 
 ## Upgrading an existing deployment
 
-Provision `notifications.high.single`, `notifications.normal.single` and `notifications.low.single` with the same partition counts, retention and reader access as their batch counterparts. The Compose topics job provisions all six. Upgrade the workers before the API so every new topic has consumers when standalone traffic starts. Existing topics and group offsets continue to serve batch work. Rows created before the migration use the batch lane because their original endpoint was not recorded.
+Use the [batch routing upgrade and rollback steps](channel-batch-routing.md) to add the nine single-partition channel topics and drain existing outbox work. Each priority retains its three-partition standalone topic and its original three-partition shared batch topic. Compose provisions 15 delivery topics plus the invalid-record topic.
 
-To roll back, switch the API back first. Keep the new workers until the single topics have drained and all stored single jobs, including scheduled work and retries, are terminal. Independent analytics consumers that need all notifications should subscribe to both sets of topics.
+For upgrades from releases predating the standalone ingress lane, provision `notifications.high.single`, `notifications.normal.single` and `notifications.low.single` with three partitions and the same retention and reader permissions as the original shared batch topics. Upgrade the workers before the API so every new topic has consumers when standalone traffic starts. Existing topics and group offsets continue to serve batch work. Rows created before the migration use the batch lane because their original endpoint was not recorded.
+
+For a rollback across the original standalone-ingress change, switch the API back first. Keep the new workers until the single topics have drained and all stored single jobs, including scheduled work and retries, are terminal. Independent consumers needing every notification should subscribe to standalone, shared batch and channel batch topics throughout a rolling upgrade.
 
 The percentage counts dispatch turns within each priority on a worker. If a Kafka poll shows that another record is waiting behind the current poll, the scheduler holds that lane's next turn for up to two seconds while its reader commits and refills. Other priorities can use free workers during this interval. A lane that has waited 30 seconds locally can take the next available turn for its priority ahead of its usual share. Work already waiting for a Redis permit or being sent completes under the same channel quota.
 
-Kafka lag, partition assignment and outstanding sends affect the share of send claims observed across the deployment. Inspect both consumer groups for a priority, for example `delivery.low` and `delivery.low.single`.
+Kafka lag, partition assignment and outstanding sends affect the share of send claims observed across the deployment. For low priority, inspect the `delivery.low.single` standalone group, the `delivery.low.batch.sms`, `delivery.low.batch.email` and `delivery.low.batch.push` channel groups, and the `delivery.low` group for legacy work.

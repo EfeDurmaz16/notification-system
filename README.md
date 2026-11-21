@@ -14,6 +14,8 @@ docker compose ps -a
 
 If port 8080 is occupied, prefix Compose commands with `API_PORT=18080` and use `http://127.0.0.1:18080` for the API. For make targets also set `API_URL=http://127.0.0.1:18080`.
 
+A fresh Compose installation uses per-channel batch readers. Each priority has a separate batch topic for SMS, email and push, feeding the same worker pool. Existing installations can [roll out or roll back the routing change](docs/channel-batch-routing.md) while preserving committed work.
+
 The first run downloads the service images, applies versioned SQL migrations, creates Kafka topics, and registers the PostgreSQL CDC connector. Wait for the API health check and the connector-init job to finish before measuring delivery. The default provider is a local simulator. The development ports bind to loopback. Go 1.26.4 is used for host-side builds and tests.
 
 ```sh
@@ -34,7 +36,7 @@ flowchart LR
     C[Client] --> A[Go API]
     A --> P[(PostgreSQL)]
     P -->|Outbox inserts via WAL| D[Debezium]
-    D --> K[Single and batch topics per priority]
+    D --> K[Standalone and channel batch topics per priority]
     K --> W[Delivery workers]
     W -->|Reserve channel slot| R[(Redis)]
     W -->|Conditional send claim| P
@@ -44,7 +46,7 @@ flowchart LR
 ```
 
 1. Create validates each item, expands templates and fingerprints the request. A transaction stores the batch replay response, immutable accepted payloads and ready outbox events. Invalid items get indexed errors. A repeated key and matching payload returns the original IDs. A conflicting valid payload gets HTTP 409.
-2. Debezium routes ready events to a single or batch topic within each priority. The create endpoint sets the lane, including for one-item batches. PostgreSQL preserves it for scheduled deliveries and retries. Consumers load the notification by ID and attempt generation.
+2. Debezium routes ready events to a standalone topic per priority or a batch topic per priority and channel. Workers also consume existing shared batch topics during upgrades. The create endpoint sets the lane, including for one-item batches. PostgreSQL preserves it for scheduled deliveries and retries. Consumers load the notification by ID and attempt generation.
 3. The shared worker pool chooses a priority with weights 6:3:1 for high, normal and low. Within each priority, standalone requests get more turns. Batch requests continue to receive turns during sustained standalone traffic. Either lane can take all available turns when the other is empty. Both share the channel's Redis quota.
 4. A worker changes the matching pending generation to sending in PostgreSQL before making a POST. A successful cancellation prevents that transition. Even if Kafka replays a ready event, the DB predicate fences workers from consuming the same send right.
 5. The worker stores the outcome before the consumer commits the fetched offsets. A future retry or scheduled send is promoted by a DB scheduler. The promotion and its outbox insert share a transaction.
@@ -69,7 +71,7 @@ The client create key identifies API intent. The provider key identifies a singl
 
 ## Verification and packaging
 
-The [assessment checklist](reports/assessment-requirements.md) links each requirement to implementation or observed evidence. The [channel-reader comparison](reports/channel-readers/README.md) explains the batch latency and throughput trade-off behind the release configuration.
+The [design decision history](docs/decision-history.md) records the options, candidate contributions, measurements and reasons for changing course. The [assessment checklist](reports/assessment-requirements.md) links each requirement to implementation or observed evidence. The [channel-reader comparison](reports/channel-readers/README.md) explains the batch latency and throughput trade-off behind the release configuration.
 
 In a [15-minute run across all three channels](reports/sustained-mixed/README.md), the API admitted 36,000 notifications per channel. Each channel recorded 35,640 provider acknowledgements, 180 deliberate rejections and 180 lost responses. An independent check found exactly one provider POST for each of the 108,000 IDs. The [restart and recovery tests](reports/final-recovery/README.md) exercise cases where a retry is required.
 

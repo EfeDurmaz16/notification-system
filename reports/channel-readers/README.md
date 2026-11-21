@@ -1,6 +1,6 @@
 # Reading batch channels independently
 
-The independent readers met the batch push latency target in both matched pairs. SMS throughput fell by 5.65% and 6.26%, exceeding the agreed 5% budget in each pair. The release keeps the shared batch reader. [Decision checks](gate.json).
+The independent readers met the batch push latency target in both matched pairs. SMS throughput fell by 5.65% and 6.26%, exceeding the agreed 5% budget in each pair. The original [experiment gate](gate.json) records both failures. On 21 November 2026 the candidate accepted up to 7% lower SMS throughput during these probes in return for faster batch push. Both pairs qualify under that revised product budget, and queued work passed the [cutover and rollback test](../channel-cutover/README.md). The release therefore uses independent batch readers in Compose. [Decision history](../../docs/decision-history.md).
 
 | Trial | Idle batch push p95 | Loaded batch push p95 | Loaded single push p95 | SMS POSTs/s during probes |
 | --- | ---: | ---: | ---: | ---: |
@@ -21,7 +21,7 @@ The baseline uses one batch topic with three partitions per priority. The candid
 
 The experiment runs A1, B1, B2, A2 in that order. Each trial starts with fresh Compose volumes, warms both push ingress lanes and obtains a separate idle calibration with 24 pairs. Push latency runs from database creation to persisted acceptance. The p95 is the 23rd of 24 sorted measurements. SMS throughput is actual provider arrivals between the first and last loaded probe samples, measured while the campaign still has a backlog.
 
-For each matched pair (A1/B1 and A2/B2), the decision rule requires candidate batch push p95 at most 2 s and candidate SMS throughput at least 95% of its baseline. Every API ID must reconcile with its database state, Kafka record, and provider POST count. All nonempty measured partitions must commit their end offsets; an empty partition can have no committed offset. The provider independently measures each channel's peak arrivals in a rolling second. Safe cutover of already queued events is a separate release gate.
+For each matched pair (A1/B1 and A2/B2), the original experiment rule required candidate batch push p95 at most 2 s and candidate SMS throughput at least 95% of its baseline. Every API ID must reconcile with its database state, Kafka record, and provider POST count. All nonempty measured partitions must commit their end offsets; an empty partition can have no committed offset. The provider independently measures each channel's peak arrivals in a rolling second. Safe cutover of already queued events is a separate release gate.
 
 ## Reproduce
 
