@@ -23,9 +23,18 @@ go test -race -v ./internal/observability
 
 The API exposes Prometheus text format on `/metrics`. Queue depth counts runnable pending notifications, including work waiting for a permit. Scheduled jobs and delayed retries have separate status gauges. Queue depth excludes Kafka records for work that has already been handled or cancelled. Use a single API scrape target for the following aggregate database metrics. Multiple API replicas would expose the same values.
 
+Read all nine channel and outcome rates in one request:
+
+```sh
+curl -fsS http://127.0.0.1:8080/metrics | grep '^notification_outcomes_per_second{'
+```
+
+For each of `sms`, `email` and `push`, the response includes `accepted`, `failed` and `unknown`. Each gauge counts notifications whose terminal outcome was recorded in the trailing five minutes and divides by 300 seconds. The database samples the interval `(now - 5 minutes, now]` on each request. Empty combinations report zero, including immediately after startup on an empty database. An accepted SMS counts once even when the provider needed several attempts. `accepted` means confirmed provider acceptance. `unknown` means the service could not establish the outcome.
+
 | Question | Query |
 | --- | --- |
 | How many runnable jobs are pending? | `notification_queue_depth` |
+| How many SMS became unknown per second over the last five minutes? | `notification_outcomes_per_second{channel="sms",status="unknown",window="5m"}` |
 | How long has the oldest runnable job been waiting since creation? | `notification_oldest_pending_seconds` |
 | How many provider accepts per second over five minutes? | `rate(notification_outcomes_total{status="accepted"}[5m])` |
 | How many new terminal outcomes of each kind? | `sum by (status) (increase(notification_outcomes_total[5m]))` |

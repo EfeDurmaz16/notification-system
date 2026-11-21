@@ -84,7 +84,7 @@ The client create key identifies API intent. The provider key identifies a singl
 
 ## Observability and operating assumptions
 
-- `/metrics` exposes logical pending depth, oldest pending age, state counts, terminal outcome counters and an acceptance latency histogram. `/healthz` checks API database readiness. Worker and connector health are separate from admission readiness.
+- `/metrics` exposes each channel's average accepted, failed and unknown notifications per second over the last five minutes. It also reports logical pending depth, oldest pending age, state counts, terminal outcome counters and an acceptance latency histogram. `/healthz` checks API database readiness. Worker and connector health are separate from admission readiness.
 - JSON logs link requests and worker outcomes to identifiers. [Distributed tracing](docs/tracing.md) shows the API, worker and provider boundary with W3C propagation and optional OTLP export.
 - The notification row is authoritative. WebSocket subscribers receive current snapshots, may skip intermediate states, and can refetch the resource after reconnecting.
 - The simulator and single-node PostgreSQL, Kafka and Redis volumes model process restarts on a development host. Production HA, authenticated tenants, retention and provider receipts require deployment-specific configuration. The API uses one trusted client namespace. Keep the default bindings on loopback.

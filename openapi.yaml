@@ -200,6 +200,7 @@ paths:
       tags: [Operations]
       operationId: getMetrics
       summary: Scrape Prometheus metrics
+      description: Includes five-minute average terminal notifications per second for each channel (sms, email, push) and outcome (accepted, failed, unknown). All nine series are available on a single scrape.
       responses:
         '200':
           description: Prometheus text exposition.

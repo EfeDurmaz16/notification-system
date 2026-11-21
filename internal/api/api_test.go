@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -69,7 +70,13 @@ func (s *repositoryStub) List(_ context.Context, f store.Filter) ([]store.Notifi
 	return nil, s.err
 }
 func (s *repositoryStub) Metrics(context.Context) (store.Metrics, error) {
-	return store.Metrics{Counts: map[string]int64{"pending": 2, "failed": 1}, LatencyBuckets: map[float64]int64{1: 1, .1: 0}, LatencyCount: 1, LatencySumSeconds: .5}, s.err
+	return store.Metrics{
+		Counts:             map[string]int64{"pending": 2, "failed": 3},
+		FiveMinuteOutcomes: map[store.ChannelOutcome]int64{{Channel: "email", Status: "failed"}: 3},
+		LatencyBuckets:     map[float64]int64{1: 1, .1: 0},
+		LatencyCount:       1,
+		LatencySumSeconds:  .5,
+	}, s.err
 }
 func (s *repositoryStub) Ping(context.Context) error { return s.err }
 
@@ -220,12 +227,35 @@ func TestFiltersAndMetrics(t *testing.T) {
 		}
 	}
 	w = call(h, "GET", "/metrics", "", "")
-	for _, want := range []string{"notification_queue_depth 2", `notification_outcomes_total{status="failed"} 1`, "notification_acceptance_latency_seconds_count 1"} {
+	for _, want := range []string{"notification_queue_depth 2", `notification_outcomes_total{status="failed"} 3`, "notification_acceptance_latency_seconds_count 1"} {
 		if !strings.Contains(w.Body.String(), want) {
 			t.Errorf("metric missing: %q", want)
 		}
 	}
 }
+func TestChannelOutcomeRates(t *testing.T) {
+	w := call(New(new(repositoryStub)), "GET", "/metrics", "", "")
+	output := w.Body.String()
+	if w.Code != 200 || !strings.Contains(output, "# TYPE notification_outcomes_per_second gauge\n") {
+		t.Fatalf("missing outcome rate gauge: HTTP %d\n%s", w.Code, output)
+	}
+	if got := strings.Count(output, "\nnotification_outcomes_per_second{"); got != 9 {
+		t.Fatalf("got %d rate samples, want 9", got)
+	}
+	for _, channel := range []string{"sms", "email", "push"} {
+		for _, status := range []string{"accepted", "failed", "unknown"} {
+			value := "0"
+			if channel == "email" && status == "failed" {
+				value = "0.01"
+			}
+			want := fmt.Sprintf("notification_outcomes_per_second{channel=%q,status=%q,window=\"5m\"} %s\n", channel, status, value)
+			if !strings.Contains(output, want) {
+				t.Errorf("missing %q", want)
+			}
+		}
+	}
+}
+
 func TestCancelAndStorageErrors(t *testing.T) {
 	s := new(repositoryStub)
 	h := New(s)

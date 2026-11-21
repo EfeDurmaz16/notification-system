@@ -64,6 +64,53 @@ func createOne(t *testing.T, s *Store, item Item) string {
 	}
 	return r.Items[0].ID
 }
+
+func TestFiveMinuteOutcomeCountsByChannel(t *testing.T) {
+	s := testStore(t)
+	// A terminal row represents one notification even if acceptance took several
+	// attempts. Each timestamp is relative to the database clock.
+	_, err := s.db.ExecContext(t.Context(), `WITH batch AS (
+	    INSERT INTO batches (id,idempotency_key,request_hash,response)
+	    VALUES (gen_random_uuid(),'rates','digest','{}') RETURNING id
+	)
+	INSERT INTO notifications
+	    (id,batch_id,item_index,recipient,channel,content,priority,status,attempt,created_at,updated_at)
+	SELECT gen_random_uuid(),batch.id,row_number() OVER (), 'recipient',channel,'content','normal',
+	    status,attempt,statement_timestamp()-created_age,statement_timestamp()-outcome_age
+	FROM batch CROSS JOIN (VALUES
+	    ('sms',   'accepted', 3, interval '2 hours',   interval '290 seconds'),
+	    ('sms',   'accepted', 1, interval '2 hours',   interval '310 seconds'),
+	    ('sms',   'failed',   2, interval '1 hour',    interval '10 seconds'),
+	    ('email', 'accepted', 1, interval '1 minute',  interval '0 seconds'),
+	    ('email', 'accepted', 1, interval '1 minute',  interval '10 seconds'),
+	    ('email', 'failed',   1, interval '1 minute',  interval '-1 hour'),
+	    ('push',  'unknown',  2, interval '1 hour',    interval '30 seconds'),
+	    ('push',  'cancelled',1, interval '1 minute',  interval '5 seconds'),
+	    ('push',  'pending',  1, interval '2 hours',   interval '2 hours'),
+	    ('email', 'pending',  1, interval '1 hour',    interval '1 hour'),
+	    ('sms',   'retry_wait',1,interval '1 minute',  interval '10 seconds')
+	) AS items(channel,status,attempt,created_age,outcome_age)`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	metrics, err := s.Metrics(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[ChannelOutcome]int64{
+		{Channel: "sms", Status: "accepted"}:   1,
+		{Channel: "sms", Status: "failed"}:     1,
+		{Channel: "email", Status: "accepted"}: 2,
+		{Channel: "push", Status: "unknown"}:   1,
+	}
+	if !reflect.DeepEqual(metrics.FiveMinuteOutcomes, want) {
+		t.Errorf("five-minute outcomes = %v, want %v", metrics.FiveMinuteOutcomes, want)
+	}
+	if metrics.Counts["accepted"] != 4 || metrics.Counts["pending"] != 2 || metrics.OldestPendingSeconds < 7200 {
+		t.Errorf("lifetime totals or oldest pending age lost across channels: %+v", metrics)
+	}
+}
+
 func TestConcurrentCreateReplay(t *testing.T) {
 	s := testStore(t)
 	ctx := t.Context()
