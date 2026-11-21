@@ -147,7 +147,7 @@ func fingerprint(path string, raw []byte) ([]byte, error) {
 		return nil, err
 	}
 	h := sha256.New()
-	io.WriteString(h, path+"\n")
+	_, _ = io.WriteString(h, path+"\n") // hash.Hash writes always succeed.
 	if err := json.NewEncoder(h).Encode(value); err != nil {
 		return nil, err
 	}
