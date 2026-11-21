@@ -57,7 +57,8 @@ func (h *providerHealth) shouldPause(channel string, status int, reason string, 
 	// 4xx recipient/content rejections still prove the endpoint is answering.
 	distressed := status >= 500 || status == http.StatusTooManyRequests ||
 		status == http.StatusUnauthorized ||
-		reason == "dial_failed" || reason == "transport_outcome_unknown" || reason == "malformed_ack"
+		reason == "dial_failed" || reason == "transport_outcome_unknown" || reason == "provider_endpoint_access" ||
+		reason == "malformed_ack" || reason == "missing_ack" || reason == "unexpected_ack_status"
 	if !distressed {
 		delete(h.streaks, channel)
 		return false

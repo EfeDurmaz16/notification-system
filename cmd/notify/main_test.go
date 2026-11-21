@@ -29,7 +29,7 @@ func TestProviderRetryConfiguration(t *testing.T) {
 	}
 	for _, tc := range []struct{ key, value string }{
 		{"RETRY_MAX_ATTEMPTS", "0"}, {"RETRY_MAX_ATTEMPTS", "abc"}, {"RETRY_BASE_BACKOFF", "0s"},
-		{"RETRY_BASE_BACKOFF", "61s"}, {"PROVIDER_429_NOT_ACCEPTED", "sometimes"},
+		{"RETRY_BASE_BACKOFF", "61s"}, {"PROVIDER_429_NOT_ACCEPTED", "sometimes"}, {"PROVIDER_ACK_MODE", "any"},
 	} {
 		t.Run(tc.key+"="+tc.value, func(t *testing.T) {
 			t.Setenv(tc.key, tc.value)
@@ -37,6 +37,17 @@ func TestProviderRetryConfiguration(t *testing.T) {
 				t.Fatal("invalid retry configuration accepted")
 			}
 		})
+	}
+}
+
+func TestReceiptModeRequiresExplicitProviderContract(t *testing.T) {
+	t.Setenv("PROVIDER_URL", "https://provider.example/send")
+	for _, mode := range []string{"", "assessment", "message_id"} {
+		t.Setenv("PROVIDER_ACK_MODE", mode)
+		engine, err := providerEngine(nil)
+		if err != nil || engine.MessageIDReceipt != (mode == "message_id") {
+			t.Fatalf("mode=%q engine=%+v err=%v", mode, engine, err)
+		}
 	}
 }
 

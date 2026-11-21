@@ -160,7 +160,7 @@ func TestDeadlineBeforeDispatchDoesNotContactProvider(t *testing.T) {
 		t.Fatal("expired request reached transport")
 		return nil, nil
 	})}
-	out := dispatch(client, req)
+	out := (&Engine{}).dispatch(client, req)
 	if !out.safeRetry || out.reason != "deadline_before_dispatch" {
 		t.Fatalf("unexpected outcome: %+v", out)
 	}

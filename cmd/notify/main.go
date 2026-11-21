@@ -162,9 +162,14 @@ func providerEngine(db delivery.Store) (*delivery.Engine, error) {
 	if err != nil {
 		return nil, errors.New("invalid PROVIDER_429_NOT_ACCEPTED")
 	}
+	mode := env("PROVIDER_ACK_MODE", "assessment")
+	if mode != "assessment" && mode != "message_id" {
+		return nil, errors.New("PROVIDER_ACK_MODE must be assessment or message_id")
+	}
 	return &delivery.Engine{
 		Store: db, URL: endpoint, Idempotent: idempotent, IdempotencyWindow: window,
 		MaxAttempts: attempts, BaseBackoff: base, ThrottleRejects: throttleRejects,
+		MessageIDReceipt: mode == "message_id",
 	}, nil
 }
 

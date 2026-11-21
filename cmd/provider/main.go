@@ -151,6 +151,20 @@ func (f *fixture) send(w http.ResponseWriter, r *http.Request) {
 		}
 		panic(http.ErrAbortHandler)
 	}
+	// These fixtures accept the notification, then return an unusable receipt.
+	// A gateway error can happen after the upstream side effect.
+	switch {
+	case strings.HasPrefix(p.Content, "[mock:gateway-after-accept]"):
+		w.Header().Set("Retry-After", "1")
+		http.Error(w, "upstream response unavailable", http.StatusServiceUnavailable)
+		return
+	case strings.HasPrefix(p.Content, "[mock:empty-ack]"):
+		w.WriteHeader(http.StatusOK)
+		return
+	case strings.HasPrefix(p.Content, "[mock:malformed-ack]"):
+		respond(w, http.StatusAccepted, map[string]string{"status": "accepted"})
+		return
+	}
 	respond(w, http.StatusAccepted, rcpt)
 }
 
