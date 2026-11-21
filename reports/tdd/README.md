@@ -1,6 +1,6 @@
 # Delivery correctness evidence
 
-The first test pauses the worker immediately before its conditional claim. A cancellation changes the modeled state to cancelled and the worker resumes. An actual local HTTP server counts POST requests.
+The first test pauses the worker immediately before its conditional claim. A cancellation changes the modeled state to cancelled and the worker resumes. An actual local HTTP server counts POST requests. The red and green files are captured test output published together in commit `9d06394`. Run the current regression below to independently check the behavior.
 
 | Stage | Change | Command | Observation |
 | --- | --- | --- | --- |
@@ -12,7 +12,7 @@ Reproduce the cancellation test against the current code with `go test -run Test
 
 ## Ambiguous retry regression
 
-An idempotent provider accepted the first POST and disconnected before its acknowledgment. The retry reused the same key and received HTTP 401. A later rejection can occur before an idempotency lookup and only establishes what happened to that attempt. The engine conservatively leaves this notification unknown and stops retrying. First-attempt permanent rejections remain failed. Compare the [original failed assertion](05-ambiguous-red.txt) and [race-tested fix](06-ambiguous-green.txt).
+An idempotent provider accepted the first POST and disconnected before its acknowledgment. The retry reused the same key and received HTTP 401. A later rejection can occur before an idempotency lookup and only establishes what happened to that attempt. The engine conservatively leaves this notification unknown and stops retrying. These transcripts record the policy at the time of that experiment. The [current retry contract](../../docs/decisions.md#implementation-choices-for-this-assessment) covers endpoint failures and permanent recipient rejections. Compare the [original failed assertion](05-ambiguous-red.txt) and [race-tested fix](06-ambiguous-green.txt).
 
 ## Provider contract references
 

@@ -18,9 +18,9 @@ This checklist covers the notification service, the six optional features and th
 | Prevent duplicate sends | Create keys replay the original IDs. A conditional send claim fences replayed queue events. Provider-side retries after ambiguity require an explicit idempotency guarantee. [Replay tests](api/checks.md) and [recovery results](final-recovery/README.md) |
 | Design delivery and retry behavior | Confirmed pre-send failures back off with jitter within a retry budget. Rejections, missing acknowledgements and abandoned attempts receive distinct treatment. [State transitions](../docs/decisions.md#state-transitions) |
 | Live queue depth, success/failure rates and latency | One scrape exposes pending depth, acceptance latency and the five-minute accepted, failed and unknown rates for each channel. [Live rate audit](sustained-mixed/window-check.json) |
-| Structured logs and correlation IDs | JSON request logs contain the correlation ID and trace ID. The worker logs the notification and trace IDs. [API logging](../internal/api/api.go) and [worker logging](../internal/delivery/engine.go) |
+| Structured logs and correlation IDs | JSON request logs contain the correlation ID and trace ID. The worker logs the create correlation ID alongside the notification and trace IDs. [API logging](../internal/api/api.go) and [worker logging](../internal/delivery/engine.go) |
 | Health check | The health endpoint checks database readiness for API admission. Worker and connector health can be inspected separately. [Health contract](../openapi.yaml) |
-| External provider integration | A disposable webhook.site endpoint captured one synthetic **email** POST with `to`, `channel` and `content`. The test checked the configured HTTP 202 accepted response and its provider message ID. The engine validates the acknowledgement timestamp. [Recorded smoke run](webhook-site.md) and [test input](../tests/webhook/provider_test.go) |
+| External provider integration | A disposable webhook.site endpoint captured one synthetic **email** POST with `to`, `channel` and `content`. The test checked the configured HTTP 202 accepted response and its provider message ID. The engine validates the acknowledgement timestamp. [Recorded smoke run](webhook-site.md) and [test input](../scripts/webhook-compose.py) |
 
 ## Capacity and visibility
 

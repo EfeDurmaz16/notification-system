@@ -5,11 +5,15 @@ Start with the API notification ID, batch ID, channel and status. Use the config
 | State | Inspect | Expected next action |
 |---|---|---|
 | pending | Age in the HTTP metrics, connector status, Kafka consumer lag, Redis availability | An eligible worker acquires a channel permit and the DB send claim. The client may still win cancellation before the first send. |
-| scheduled / retry_wait | The due time, DB scheduler and remaining attempts | A new ready event appears when the scheduler promotes the job. |
+| scheduled / retry_wait | API field `nextAttemptAt`, DB scheduler and remaining attempts | A new ready event appears when the scheduler promotes the job. |
 | sending | Worker logs for the notification ID and its trace; provider request history | A response resolves the attempt, or stale-send recovery applies the configured contract. |
-| failed | Worker log field `reason`, HTTP status and attempt number | Inspect the explicit rejection or exhausted pre-send failures. |
-| unknown | Original notification ID, timestamps, trace and provider evidence | [Check the Webhook.site request history](#checking-an-unknown-notification-in-webhooksite) if the worker used that provider. |
+| failed | GET the notification for `lastReason`, `providerHttpStatus` (if a response arrived) and `attempt` | Inspect the explicit rejection or exhausted pre-send failures. |
+| unknown | API field `lastReason`, original notification ID, timestamps, trace and provider evidence | [Check the Webhook.site request history](#checking-an-unknown-notification-in-webhooksite) if the worker used that provider. |
 | accepted | Persisted provider message ID | The simulated provider accepted the request. There are no recipient delivery receipts in the assessment protocol. |
+
+The notification detail, list and WebSocket snapshots include the latest recorded reason and provider HTTP status when available. A `202` with `lastReason: malformed_ack` means the provider response could not confirm acceptance. A `send_lease_expired` means a worker stopped recording progress after claiming the attempt. Scheduled and retrying notifications expose `nextAttemptAt`. Rows created before delivery evidence was introduced can have no recorded reason.
+
+Filter the API and worker logs by the `X-Correlation-ID` returned on the original create response. For a batch, narrow the worker results by `notification_id`. A later status lookup or replay can have its own request correlation ID. Provider result logs include `provider_message_id` when a receipt exists. Transient database failures allow up to three attempts to save the same receipt within five seconds. Saving an identical result for the same generation leaves its timestamp and status history intact. A conflicting result or a different generation stops the write. These attempts issue no further provider POST. If `persistence_confirmed` is false, check the database and receipt before acting. The database write may have committed before its response was lost.
 
 The following commands read the running Compose stack. Replace `delivery.normal` or the connector name if configured differently.
 
@@ -58,6 +62,9 @@ All worker replicas in a deployment must use the same database, Kafka cluster, c
 | `HTTP_ADDR` | API bind address, default :8080 inside the container. `API_PORT` selects the published host port in Compose. |
 | `KAFKA_BROKERS`, `KAFKA_GROUP` | Comma-separated Kafka bootstrap servers and delivery consumer group prefix. |
 | `REDIS_ADDR` | Shared rate limiter in host:port form. |
+| `LOG_LEVEL` | JSON log threshold for API and worker. Default `INFO` includes HTTP access status and confirmed provider acceptances. |
+| `RETRY_MAX_ATTEMPTS`, `RETRY_BASE_BACKOFF` | Six total attempts by default, with equal jitter on a two-second starting delay. Applies only to eligible retries. |
+| `PROVIDER_429_NOT_ACCEPTED` | Set only for a provider that guarantees a throttled POST has no side effect. Defaults to false. |
 | `WORKER_CONCURRENCY` | Total active worker slots in one replica. Compose starts with 24. |
 | `BATCH_ROUTING` | Compose defaults to `channel` and the binary alone defaults to `shared`. Use `dual-read` during migration. See the [routing guide](channel-batch-routing.md). |
 | `BATCH_SHARE_PERCENT` | Batch dispatch share from 1 to 49 within a priority when both lanes have work ready on a replica. The initial default is 20. Use the same setting on all workers. |
@@ -76,3 +83,9 @@ For a rollback across the original standalone-ingress change, switch the API bac
 The percentage counts dispatch turns within each priority on a worker. If a Kafka poll shows that another record is waiting behind the current poll, the scheduler holds that lane's next turn for up to two seconds while its reader commits and refills. Other priorities can use free workers during this interval. A lane that has waited 30 seconds locally can take the next available turn for its priority ahead of its usual share. Work already waiting for a Redis permit or being sent completes under the same channel quota.
 
 Kafka lag, partition assignment and outstanding sends affect the share of send claims observed across the deployment. For low priority, inspect the `delivery.low.single` standalone group, the `delivery.low.batch.sms`, `delivery.low.batch.email` and `delivery.low.batch.push` channel groups, and the `delivery.low` group for legacy work.
+
+### Provider outage cooldown
+
+After one replica sees three consecutive endpoint failures on the same channel, Redis pauses new quota grants for that channel across all replicas for 30 seconds. HTTP 5xx, 429, 401, connection failures and malformed acknowledgements count toward the threshold. A valid acceptance or a recipient/content rejection clears that replica's streak. Inspect worker logs for `provider admissions paused` and the reported channel and HTTP status. For 401, verify provider credentials before expecting recovery. A 403 or 404 can be specific to a recipient and does not trip the gate.
+
+A queued notification keeps its current state until it can obtain a permit. Work already admitted can still reach the provider, and its outcome follows the normal retry rules. Expiry resumes paced admission; a continuing outage can open another cooldown. The threshold is local to each replica, so sparse failures spread over different replicas can take longer to trigger protection. A pause never resends an `unknown` notification.
