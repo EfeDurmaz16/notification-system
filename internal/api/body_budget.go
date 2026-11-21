@@ -3,32 +3,17 @@ package api
 import (
 	"errors"
 	"io"
+	"net/http"
 	"sync"
 )
 
 var errBodyCapacity = errors.New("create capacity temporarily exhausted")
 
-// The budget covers the capacity of encoded body buffers, including scratch
-// space and both buffers during growth. Parsing and storage have separate costs.
+const initialBodyCapacity = 4 << 10
+
 type bodyBudget struct {
 	mu        sync.Mutex
 	available int
-}
-
-func (b *bodyBudget) take(n int) bool {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	if n > b.available {
-		return false
-	}
-	b.available -= n
-	return true
-}
-
-func (b *bodyBudget) give(n int) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	b.available += n
 }
 
 type createBody struct {
@@ -37,36 +22,59 @@ type createBody struct {
 }
 
 func (b *createBody) release() {
-	b.budget.give(cap(b.data))
+	b.budget.mu.Lock()
+	defer b.budget.mu.Unlock()
+	b.budget.available += cap(b.data)
 	b.data = nil
 }
 
-// Only this small read buffer is reserved while waiting for the first bytes.
-// Declared lengths and chunked transfer use the same incremental accounting.
-func (b *createBody) read(src io.Reader) error {
-	const chunk = 4 << 10
-	if !b.budget.take(chunk) {
-		return errBodyCapacity
+// Charge the final capacities of the active uploads. A resize temporarily
+// retains the old allocation while copying. Serializing only that copy bounds
+// this extra live memory to one old buffer, even if every upload grows at once.
+func (b *createBody) grow(target int) bool {
+	b.budget.mu.Lock()
+	defer b.budget.mu.Unlock()
+	delta := target - cap(b.data)
+	if delta > b.budget.available {
+		return false
 	}
-	defer b.budget.give(chunk)
-	var scratch [chunk]byte
-	_, err := io.CopyBuffer(b, src, scratch[:])
-	return err
+	buf := make([]byte, len(b.data), target)
+	copy(buf, b.data)
+	b.data = buf
+	b.budget.available -= delta
+	return true
 }
 
-func (b *createBody) Write(p []byte) (int, error) {
-	needed := len(b.data) + len(p)
-	if needed > cap(b.data) {
-		target := min(maxBody, max(needed, 2*cap(b.data)))
-		if !b.budget.take(target) {
-			return 0, errBodyCapacity
-		}
-		replacement := make([]byte, len(b.data), target)
-		copy(replacement, b.data)
-		oldCapacity := cap(b.data)
-		b.data = replacement
-		b.budget.give(oldCapacity)
+// Read directly into charged storage. At an exact capacity boundary, probe
+// for one byte before growing: EOF or a slow sender needs no extra capacity.
+func (b *createBody) read(src io.Reader) error {
+	if !b.grow(initialBodyCapacity) {
+		return errBodyCapacity
 	}
-	b.data = append(b.data, p...)
-	return len(p), nil
+	var probe [1]byte
+	for {
+		free := b.data[len(b.data):cap(b.data)]
+		target := free
+		if len(free) == 0 {
+			target = probe[:]
+		}
+		n, err := src.Read(target)
+		if n > 0 && len(free) == 0 {
+			if len(b.data) == maxBody {
+				return &http.MaxBytesError{Limit: maxBody}
+			}
+			if !b.grow(min(2*cap(b.data), maxBody)) {
+				return errBodyCapacity
+			}
+			b.data = append(b.data, probe[0])
+		} else {
+			b.data = b.data[:len(b.data)+n]
+		}
+		if err == io.EOF {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+	}
 }
