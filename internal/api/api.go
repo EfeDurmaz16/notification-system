@@ -140,7 +140,16 @@ func readBody(w http.ResponseWriter, r *http.Request) ([]byte, bool) {
 			return nil, false
 		}
 	}
-	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxBody))
+	if r.ContentLength > maxBody {
+		problem(w, 413, "body exceeds 5 MiB")
+		return nil, false
+	}
+	var buf bytes.Buffer
+	if r.ContentLength > 0 {
+		// Leave room for ReadFrom to observe EOF without growing the buffer.
+		buf.Grow(int(r.ContentLength) + bytes.MinRead)
+	}
+	_, err := buf.ReadFrom(http.MaxBytesReader(w, r.Body, maxBody))
 	if err != nil {
 		var tooLarge *http.MaxBytesError
 		if errors.As(err, &tooLarge) {
@@ -150,6 +159,7 @@ func readBody(w http.ResponseWriter, r *http.Request) ([]byte, bool) {
 		}
 		return nil, false
 	}
+	body := buf.Bytes()
 	if !utf8.Valid(body) || !json.Valid(body) {
 		problem(w, 400, "expected one UTF-8 JSON document")
 		return nil, false
@@ -175,19 +185,10 @@ func (s server) create(w http.ResponseWriter, r *http.Request) {
 	}
 	batch := r.URL.Path == "/v1/batches"
 	ingress := store.SingleIngress
-	rawItems := []json.RawMessage{body}
 	if batch {
 		ingress = store.BatchIngress
-		var envelope struct {
-			Notifications []json.RawMessage `json:"notifications"`
-		}
-		if err := strictJSON(body, &envelope); err != nil || len(envelope.Notifications) < 1 || len(envelope.Notifications) > 1000 {
-			problem(w, 400, "provide 1 to 1000 notifications")
-			return
-		}
-		rawItems = envelope.Notifications
 	}
-	hash, err := fingerprint(r.URL.Path, body)
+	rawItems, hash, err := requestItems(r.URL.Path, body)
 	if err != nil {
 		problem(w, 400, err.Error())
 		return

@@ -75,7 +75,7 @@ func TestCreateUsesStoredReceiptForStatus(t *testing.T) {
 			if p == "/v1/batches" {
 				body = `{"notifications":[` + body + "]}"
 			}
-			h, err := fingerprint(p, []byte(body))
+			_, h, err := requestItems(p, []byte(body))
 			if err != nil {
 				t.Fatal(err)
 			}
