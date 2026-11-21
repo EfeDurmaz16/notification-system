@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log/slog"
 	"regexp"
+	"slices"
 	"time"
 
 	"github.com/EfeDurmaz16/notification-system/internal/delivery"
@@ -163,15 +164,12 @@ func (w *pollWindow) observe(records int, elapsed time.Duration) {
 }
 
 type task struct {
+	job          delivery.Job
+	lease        slot
 	refillSource int // source + 1 if this task drains a poll with known backlog
 	admitBy      time.Time
-	event        event
 	record       *kgo.Record
-	result       chan<- outcome
-}
-type outcome struct {
-	record *kgo.Record
-	err    error
+	result       chan<- error
 }
 
 type batch struct {
@@ -189,6 +187,7 @@ const (
 
 type priorityQueue struct {
 	lanes       [2][]task
+	firstReady  [2]int // first task whose channel can request a permit
 	refillUntil [2][1 + len(channels)]time.Time
 	lastServed  [2]time.Time
 	batchCredit int
@@ -205,10 +204,11 @@ func (q *priorityQueue) refilling(lane ingressLane, now time.Time) bool {
 
 func (q *priorityQueue) agingAt(lane ingressLane) time.Time {
 	jobs := q.lanes[lane]
-	if len(jobs) == 0 || jobs[0].admitBy.IsZero() {
+	i := q.firstReady[lane]
+	if i >= len(jobs) || jobs[i].admitBy.IsZero() {
 		return time.Time{}
 	}
-	start := jobs[0].admitBy.Add(-admissionBudget)
+	start := jobs[i].admitBy.Add(-admissionBudget)
 	if q.lastServed[lane].After(start) {
 		start = q.lastServed[lane]
 	}
@@ -218,11 +218,12 @@ func (q *priorityQueue) agingAt(lane ingressLane) time.Time {
 // Decide without mutating state: a new Kafka poll may arrive before a free
 // worker. Credit advances only when an actual task leaves this priority.
 func (q *priorityQueue) next(batchPercent int, now time.Time) (lane ingressLane, nextCredit int, ready bool) {
-	singleReady, bulkReady := len(q.lanes[singleLane]) != 0, len(q.lanes[bulkLane]) != 0
-	if !singleReady && !q.refilling(singleLane, now) {
+	singleReady := q.firstReady[singleLane] < len(q.lanes[singleLane])
+	bulkReady := q.firstReady[bulkLane] < len(q.lanes[bulkLane])
+	if !singleReady && (len(q.lanes[singleLane]) > 0 || !q.refilling(singleLane, now)) {
 		return bulkLane, 0, bulkReady
 	}
-	if !bulkReady && !q.refilling(bulkLane, now) {
+	if !bulkReady && (len(q.lanes[bulkLane]) > 0 || !q.refilling(bulkLane, now)) {
 		return singleLane, 0, singleReady
 	}
 	if singleReady && bulkReady {
@@ -254,9 +255,13 @@ func (q *priorityQueue) enqueue(b batch) {
 
 func (q *priorityQueue) dispatched(lane ingressLane, credit int, now time.Time) {
 	jobs := q.lanes[lane]
-	refill := jobs[0].refillSource
+	i := q.firstReady[lane]
+	refill := jobs[i].refillSource
+	// Keep FIFO among eligible jobs and within each parked channel.
+	copy(jobs[1:i+1], jobs[:i])
 	jobs[0] = task{}
 	q.lanes[lane] = jobs[1:]
+	q.firstReady[lane] = 0
 	q.lastServed[lane] = now
 	q.batchCredit = credit
 	if refill > 0 {
@@ -267,7 +272,14 @@ func (q *priorityQueue) dispatched(lane ingressLane, credit int, now time.Time) 
 	}
 }
 
+type quota interface {
+	tryAcquire(context.Context, string) (slot, time.Duration, error)
+	release(context.Context, slot) error
+}
+
 type scheduler struct {
+	quota        quota
+	blockedUntil map[string]time.Time
 	queues       [len(priorities)]priorityQueue
 	cursor       int
 	batchPercent int
@@ -286,18 +298,25 @@ func (s *scheduler) prepare(now time.Time) time.Time {
 	for p := range s.queues {
 		q := &s.queues[p]
 		for _, lane := range [...]ingressLane{singleLane, bulkLane} {
-			jobs := q.lanes[lane]
-			for len(jobs) > 0 && !jobs[0].admitBy.IsZero() && !jobs[0].admitBy.After(now) {
-				t := jobs[0]
-				t.result <- outcome{record: t.record, err: context.DeadlineExceeded}
-				jobs[0] = task{}
-				jobs = jobs[1:]
+			kept := slices.DeleteFunc(q.lanes[lane], func(t task) bool {
+				if !t.admitBy.IsZero() && !t.admitBy.After(now) {
+					t.result <- context.DeadlineExceeded
+					return true
+				}
+				consider(t.admitBy)
+				return false
+			})
+			q.lanes[lane] = kept
+			i := 0
+			for ; i < len(kept); i++ {
+				until := s.blockedUntil[kept[i].job.Channel]
+				if !until.After(now) {
+					break
+				}
+				consider(until)
 			}
-			q.lanes[lane] = jobs
-			if len(jobs) > 0 {
-				consider(jobs[0].admitBy)
-				consider(q.agingAt(lane))
-			}
+			q.firstReady[lane] = i
+			consider(q.agingAt(lane))
 			for _, until := range q.refillUntil[lane] {
 				consider(until)
 			}
@@ -318,22 +337,51 @@ func (s *scheduler) next(now time.Time) (chosen route, cursor, credit int, ready
 	return route{}, 0, 0, false
 }
 
-func (s *scheduler) run(ctx context.Context, in <-chan batch, out chan<- task) {
+// A free handler asks for one assignment. A quota denial keeps that handler
+// available to any eligible channel, without advancing either fairness cursor.
+func (s *scheduler) run(ctx context.Context, in <-chan batch, idle <-chan chan task) {
 	timer := time.NewTimer(time.Hour)
 	defer timer.Stop()
+	s.blockedUntil = make(map[string]time.Time, len(channels))
+	var worker chan task
 	for ctx.Err() == nil {
 		now := time.Now()
+		wake := s.prepare(now)
+		chosen, cursor, credit, ready := s.next(now)
+		if worker != nil && ready {
+			q := &s.queues[chosen.class]
+			t := q.lanes[chosen.lane][q.firstReady[chosen.lane]]
+			admission, cancel := context.WithDeadline(ctx, t.admitBy)
+			lease, wait, err := s.quota.tryAcquire(admission, t.job.Channel)
+			cancel()
+			switch {
+			case err != nil:
+				t.result <- err
+			case wait > 0:
+				s.blockedUntil[t.job.Channel] = time.Now().Add(wait)
+				continue
+			default:
+				t.lease = lease
+				select {
+				case worker <- t:
+					worker = nil
+				case <-ctx.Done():
+					release(ctx, s.quota, t)
+					return
+				}
+			}
+			q.dispatched(chosen.lane, credit, time.Now())
+			s.cursor = cursor
+			continue
+		}
 		var tick <-chan time.Time
-		if wake := s.prepare(now); !wake.IsZero() {
+		if !wake.IsZero() {
 			timer.Reset(time.Until(wake))
 			tick = timer.C
 		}
-		var ready chan<- task
-		var selected task
-		chosen, cursor, credit, ok := s.next(now)
-		if ok {
-			ready = out
-			selected = s.queues[chosen.class].lanes[chosen.lane][0]
+		var request <-chan chan task
+		if worker == nil {
+			request = idle
 		}
 		select {
 		case <-ctx.Done():
@@ -341,9 +389,7 @@ func (s *scheduler) run(ctx context.Context, in <-chan batch, out chan<- task) {
 		case <-tick:
 		case b := <-in:
 			s.queues[b.class].enqueue(b)
-		case ready <- selected:
-			s.queues[chosen.class].dispatched(chosen.lane, credit, time.Now())
-			s.cursor = cursor
+		case worker = <-request:
 		}
 	}
 }
@@ -351,7 +397,7 @@ func (s *scheduler) run(ctx context.Context, in <-chan batch, out chan<- task) {
 // Run owns all clients and goroutines until shutdown. Each priority reader
 // exposes a limited batch while waiting for the previous batch to commit.
 // Priority selects the next locally available job; it does not preempt a POST.
-func Run(ctx context.Context, cfg Config, store Store, sender Sender) error {
+func Run(ctx context.Context, cfg Config, store Store, engine *delivery.Engine) error {
 	if len(cfg.Brokers) == 0 || cfg.Group == "" || cfg.RedisAddr == "" || cfg.Workers < 1 {
 		return errors.New("missing stream brokers, group, Redis address or workers")
 	}
@@ -362,76 +408,85 @@ func Run(ctx context.Context, cfg Config, store Store, sender Sender) error {
 		return errors.New("batch dispatch share must be from 1 to 49 percent")
 	}
 	rdb := redis.NewClient(&redis.Options{Addr: cfg.RedisAddr, MaxRetries: -1, ContextTimeoutEnabled: true})
-	defer rdb.Close()
+	defer func() { _ = rdb.Close() }()
 	limit := limiter{client: rdb, prefix: "notifications:quota:"}
+	health := providerHealth{limit: limit}
+	sender := *engine
+	sender.ObserveEndpoint = health.observe
 	group, ctx := errgroup.WithContext(ctx)
 	input := make(chan batch)
-	ready := make(chan task)
+	idle := make(chan chan task)
 	group.Go(func() error {
-		s := scheduler{batchPercent: cfg.BatchSharePercent}
-		s.run(ctx, input, ready)
+		s := scheduler{batchPercent: cfg.BatchSharePercent, quota: limit}
+		s.run(ctx, input, idle)
 		return nil
 	})
 	for range cfg.Workers {
 		group.Go(func() error {
+			assignment := make(chan task)
 			for {
 				select {
 				case <-ctx.Done():
 					return nil
-				case t := <-ready:
-					// Shutdown and a handoff can become ready together. Leave
-					// that unstarted offset for the next group member.
-					if ctx.Err() != nil {
-						return nil
-					}
-					t.result <- outcome{record: t.record, err: process(ctx, store, sender, limit, t.event, t.admitBy)}
+				case idle <- assignment:
+				}
+				select {
+				case <-ctx.Done():
+					return nil
+				case t := <-assignment:
+					t.result <- send(ctx, &sender, limit, t)
 				}
 			}
 		})
 	}
 	for p := range priorities {
 		for _, lane := range [...]ingressLane{bulkLane, singleLane} {
-			group.Go(func() error { return consume(ctx, cfg, reader{route: route{p, lane}}, input) })
+			group.Go(func() error { return consume(ctx, cfg, reader{route: route{p, lane}}, store, input) })
 		}
 		if cfg.ChannelReaders {
 			for ch := range channels {
-				group.Go(func() error { return consume(ctx, cfg, reader{route{p, bulkLane}, ch + 1}, input) })
+				group.Go(func() error { return consume(ctx, cfg, reader{route{p, bulkLane}, ch + 1}, store, input) })
 			}
 		}
 	}
 	return group.Wait()
 }
 
-func process(ctx context.Context, store Store, sender Sender, limit limiter, e event, admitBy time.Time) error {
-	admissionCtx, cancelAdmission := context.WithDeadline(ctx, admitBy)
-	defer cancelAdmission()
-	job, err := store.GetJob(admissionCtx, e.ID)
+// The immutable job snapshot supplies the channel for quota scheduling. A
+// subsequent cancellation still wins until Engine.Send claims the database row.
+func load(ctx context.Context, store Store, e event) (delivery.Job, bool, error) {
+	job, err := store.GetJob(ctx, e.ID)
 	if err != nil {
-		return fmt.Errorf("load notification %s: %w", e.ID, err)
-	}
-	if e.Attempt < job.Attempt {
-		return nil
+		return delivery.Job{}, false, fmt.Errorf("load notification %s: %w", e.ID, err)
 	}
 	if e.Attempt > job.Attempt {
-		return fmt.Errorf("%w: event=%d row=%d", errFutureGeneration, e.Attempt, job.Attempt)
+		return delivery.Job{}, false, fmt.Errorf("%w: event=%d row=%d", errFutureGeneration, e.Attempt, job.Attempt)
 	}
-	lease, err := limit.acquire(admissionCtx, job.Channel)
-	if err != nil {
+	return job, e.Attempt == job.Attempt && job.Status == "pending", nil
+}
+
+func send(ctx context.Context, sender Sender, limit quota, t task) error {
+	defer release(ctx, limit, t)
+	if err := ctx.Err(); err != nil {
 		return err
+	}
+	if !time.Now().Before(t.admitBy) {
+		return context.DeadlineExceeded
 	}
 	callCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	err = sender.Send(callCtx, job)
-	// On shutdown keep the reservation conservative if Redis is unreachable.
-	releaseCtx, releaseCancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Second)
-	defer releaseCancel()
-	if releaseErr := limit.release(releaseCtx, lease); releaseErr != nil {
-		slog.Warn("quota release deferred to lease expiry", "id", job.ID, "channel", job.Channel, "error", releaseErr)
-	}
-	return err
+	return sender.Send(callCtx, t.job)
 }
 
-func consume(ctx context.Context, cfg Config, r reader, in chan<- batch) error {
+func release(ctx context.Context, limit quota, t task) {
+	releaseCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Second)
+	defer cancel()
+	if err := limit.release(releaseCtx, t.lease); err != nil {
+		slog.Warn("quota release deferred to lease expiry", "id", t.job.ID, "channel", t.job.Channel, "error", err)
+	}
+}
+
+func consume(ctx context.Context, cfg Config, r reader, store Store, in chan<- batch) error {
 	topic := "notifications." + r.suffix()
 	window := r.window(cfg.Workers, cfg.BatchSharePercent)
 	for ctx.Err() == nil {
@@ -443,7 +498,7 @@ func consume(ctx context.Context, cfg Config, r reader, in chan<- batch) error {
 		if err != nil {
 			return fmt.Errorf("configure %s: %w", topic, err)
 		}
-		err = consumeBatches(ctx, client, r, in, &window)
+		err = consumeBatches(ctx, client, r, store, in, &window)
 		client.CloseAllowingRebalance()
 		if ctx.Err() != nil {
 			return nil
@@ -456,7 +511,7 @@ func consume(ctx context.Context, cfg Config, r reader, in chan<- batch) error {
 	return nil
 }
 
-func consumeBatches(ctx context.Context, client *kgo.Client, r reader, in chan<- batch, window *pollWindow) error {
+func consumeBatches(ctx context.Context, client *kgo.Client, r reader, store Store, in chan<- batch, window *pollWindow) error {
 	for {
 		fetches := client.PollRecords(ctx, window.size)
 		if errs := fetches.Errors(); len(errs) > 0 {
@@ -474,7 +529,7 @@ func consumeBatches(ctx context.Context, client *kgo.Client, r reader, in chan<-
 				more = true
 			}
 		})
-		err := processBatch(ctx, client, r, in, records, more)
+		err := processBatch(ctx, client, r, store, in, records, more)
 		if err != nil {
 			if errors.Is(err, context.DeadlineExceeded) {
 				// Retry a single offset first when the admission window expires.
@@ -491,11 +546,14 @@ func consumeBatches(ctx context.Context, client *kgo.Client, r reader, in chan<-
 
 // Bound time spent holding a group generation. Stop new dispatch admissions
 // early enough to finish the bounded provider call before the commit deadline.
-func processBatch(parent context.Context, client *kgo.Client, source reader, in chan<- batch, records []*kgo.Record, more bool) error {
+func processBatch(parent context.Context, client *kgo.Client, source reader, store Store, in chan<- batch, records []*kgo.Record, more bool) error {
 	deadline := time.Now().Add(batchBudget)
 	ctx, cancel := context.WithDeadline(parent, deadline)
 	defer cancel()
-	results := make(chan outcome, len(records))
+	results := make(chan error, len(records))
+	admitBy := deadline.Add(-40 * time.Second)
+	admission, stop := context.WithDeadline(ctx, admitBy)
+	defer stop()
 	b := batch{route: source.route, source: source.source, more: more}
 	for _, r := range records {
 		e, err := decode(r.Value)
@@ -505,7 +563,19 @@ func processBatch(parent context.Context, client *kgo.Client, source reader, in 
 			}
 			continue
 		}
-		b.tasks = append(b.tasks, task{event: e, record: r, result: results, admitBy: deadline.Add(-40 * time.Second)})
+		job, current, err := load(admission, store, e)
+		if errors.Is(err, dbstore.ErrNotFound) || errors.Is(err, errFutureGeneration) {
+			if err := quarantine(ctx, client, r); err != nil {
+				return err
+			}
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		if current {
+			b.tasks = append(b.tasks, task{job: job, record: r, result: results, admitBy: admitBy})
+		}
 	}
 	select {
 	case <-ctx.Done():
@@ -517,12 +587,9 @@ func processBatch(parent context.Context, client *kgo.Client, source reader, in 
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case result := <-results:
-			if errors.Is(result.err, dbstore.ErrNotFound) || errors.Is(result.err, errFutureGeneration) {
-				result.err = quarantine(ctx, client, result.record)
-			}
-			if result.err != nil && firstErr == nil {
-				firstErr = result.err
+		case err := <-results:
+			if err != nil && firstErr == nil {
+				firstErr = err
 			}
 		}
 	}

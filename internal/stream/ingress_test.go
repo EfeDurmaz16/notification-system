@@ -5,6 +5,8 @@ import (
 	"strconv"
 	"testing"
 	"time"
+
+	"github.com/EfeDurmaz16/notification-system/internal/delivery"
 )
 
 func TestIngressShareUnderContinuousContention(t *testing.T) {
@@ -32,27 +34,27 @@ func TestIngressShareUnderContinuousContention(t *testing.T) {
 
 func TestShortSingleArrivalsCannotStarveReadyBatch(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
-	in, out := make(chan batch), make(chan task)
+	in, idle := make(chan batch), make(chan chan task)
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		s := scheduler{batchPercent: 20}
-		s.run(ctx, in, out)
+		s := scheduler{batchPercent: 20, quota: openQuota{}}
+		s.run(ctx, in, idle)
 	}()
 	defer func() { cancel(); <-done }()
 	in <- batch{route: route{2, bulkLane}, tasks: make([]task, 30)}
 	// A bulk-only period must not accrue a claim on future dispatches.
 	for range 3 {
-		<-out
+		take(idle)
 	}
 	singles := 0
 	for slot := 1; slot <= 15; slot++ {
 		if singles == 0 {
-			in <- batch{route: route{2, singleLane}, tasks: []task{{event: event{ID: "single"}}}}
+			in <- batch{route: route{2, singleLane}, tasks: []task{{job: delivery.Job{ID: "single"}}}}
 			singles++
 		}
-		job := <-out
-		gotBulk := job.event.ID == ""
+		job := take(idle)
+		gotBulk := job.job.ID == ""
 		if gotBulk != (slot%5 == 0) {
 			t.Fatalf("dispatch %d: bulk=%t", slot, gotBulk)
 		}
@@ -72,21 +74,21 @@ func TestIngressTopicAndGroupSuffixes(t *testing.T) {
 
 func TestPriorityAndIngressBudgetsCompose(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
-	in, out := make(chan batch), make(chan task)
+	in, idle := make(chan batch), make(chan chan task)
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		s := scheduler{batchPercent: 20}
-		s.run(ctx, in, out)
+		s := scheduler{batchPercent: 20, quota: openQuota{}}
+		s.run(ctx, in, idle)
 	}()
 	defer func() { cancel(); <-done }()
 	for p := range priorities {
 		for _, lane := range []ingressLane{singleLane, bulkLane} {
 			jobs := make([]task, 100)
 			for i := range jobs {
-				jobs[i].event = event{ID: "single", Attempt: p}
+				jobs[i].job = delivery.Job{ID: "single", Attempt: p}
 				if lane == bulkLane {
-					jobs[i].event.ID = "bulk"
+					jobs[i].job.ID = "bulk"
 				}
 			}
 			in <- batch{route: route{p, lane}, tasks: jobs}
@@ -94,7 +96,7 @@ func TestPriorityAndIngressBudgetsCompose(t *testing.T) {
 	}
 	var totals, bulk [3]int
 	for range 100 {
-		e := (<-out).event
+		e := take(idle).job
 		totals[e.Attempt]++
 		if e.ID == "bulk" {
 			bulk[e.Attempt]++
@@ -141,7 +143,7 @@ func TestRunRejectsUnsupportedBatchShare(t *testing.T) {
 
 func TestKnownKafkaBacklogRetainsTurnOnlyThroughRefillGrace(t *testing.T) {
 	now := time.Unix(2000, 0)
-	s := scheduler{batchPercent: 20}
+	s := scheduler{batchPercent: 20, quota: openQuota{}}
 	q := &s.queues[0]
 	q.enqueue(batch{route: route{0, singleLane}, tasks: []task{{}}, more: true})
 	q.enqueue(batch{route: route{0, bulkLane}, tasks: []task{{}}})
@@ -192,14 +194,14 @@ func TestDeadlineAgingOnlyWithinChosenPriority(t *testing.T) {
 
 func TestExpiredHeadReplaysWithoutSpendingTurn(t *testing.T) {
 	now := time.Unix(2000, 0)
-	s := scheduler{batchPercent: 20}
+	s := scheduler{batchPercent: 20, quota: openQuota{}}
 	q := &s.queues[0]
-	results := make(chan outcome, 1)
+	results := make(chan error, 1)
 	q.enqueue(batch{route: route{0, bulkLane}, tasks: []task{{admitBy: now, result: results}, {admitBy: now.Add(time.Minute)}}})
 	q.enqueue(batch{route: route{0, singleLane}, tasks: []task{{admitBy: now.Add(time.Minute)}}})
 	q.batchCredit = 80
 	s.prepare(now)
-	if len(results) != 1 || (<-results).err != context.DeadlineExceeded {
+	if len(results) != 1 || (<-results) != context.DeadlineExceeded {
 		t.Fatal("expired task must return for Kafka replay")
 	}
 	r, _, _, ok := s.next(now)

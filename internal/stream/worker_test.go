@@ -53,6 +53,19 @@ func TestPollLimitTracksWeightAndCapsReplay(t *testing.T) {
 	}
 }
 
+type openQuota struct{}
+
+func (openQuota) tryAcquire(context.Context, string) (slot, time.Duration, error) {
+	return slot{}, 0, nil
+}
+func (openQuota) release(context.Context, slot) error { return nil }
+
+func take(idle chan<- chan task) task {
+	worker := make(chan task)
+	idle <- worker
+	return <-worker
+}
+
 func TestWeightedDispatch(t *testing.T) {
 	for _, tc := range []struct {
 		name              string
@@ -66,21 +79,21 @@ func TestWeightedDispatch(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx, cancel := context.WithCancel(t.Context())
 			in := make(chan batch)
-			out := make(chan task)
+			idle := make(chan chan task)
 			done := make(chan struct{})
-			go func() { defer close(done); var s scheduler; s.run(ctx, in, out) }()
+			go func() { defer close(done); s := scheduler{quota: openQuota{}}; s.run(ctx, in, idle) }()
 			defer func() { cancel(); <-done }()
 			for class, n := range tc.backlog {
 				jobs := make([]task, n)
 				for i := range jobs {
-					jobs[i].event.Attempt = class
+					jobs[i].job.Attempt = class
 				}
 				in <- batch{route: route{class, bulkLane}, tasks: jobs}
 			}
 			var got [3]int
 			for range tc.n {
-				job := <-out
-				got[job.event.Attempt]++
+				job := take(idle)
+				got[job.job.Attempt]++
 			}
 			if got != tc.expected {
 				t.Errorf("got %v, want %v", got, tc.expected)
@@ -97,21 +110,46 @@ type sendFunc func(context.Context, delivery.Job) error
 
 func (f sendFunc) Send(ctx context.Context, j delivery.Job) error { return f(ctx, j) }
 
-func TestStaleEventCannotDispatch(t *testing.T) {
-	s := testJobs{delivery.Job{ID: "example", Attempt: 2}}
-	send := sendFunc(func(context.Context, delivery.Job) error { t.Fatal("unexpected send"); return nil })
-	if err := process(t.Context(), s, send, limiter{}, event{ID: "example", Attempt: 1}, time.Now().Add(time.Second)); err != nil {
-		t.Fatal(err)
+func TestOnlyCurrentPendingEventMayRequestQuota(t *testing.T) {
+	for _, tc := range []struct {
+		state        string
+		eventAttempt int
+		want         bool
+	}{
+		{"pending", 2, true}, {"pending", 1, false}, {"cancelled", 2, false},
+		{"sending", 2, false}, {"accepted", 2, false}, {"failed", 2, false},
+		{"unknown", 2, false}, {"retry_wait", 2, false}, {"scheduled", 2, false},
+	} {
+		store := testJobs{delivery.Job{ID: "example", Status: tc.state, Attempt: 2}}
+		_, current, err := load(t.Context(), store, event{ID: "example", Attempt: tc.eventAttempt})
+		if err != nil || current != tc.want {
+			t.Errorf("state %s event %d: current=%t, err=%v", tc.state, tc.eventAttempt, current, err)
+		}
 	}
 }
 
 func TestQuotaBackendFailureBlocksSend(t *testing.T) {
 	client := redis.NewClient(&redis.Options{Addr: "127.0.0.1:0", MaxRetries: -1, DialTimeout: 50 * time.Millisecond})
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 	job := delivery.Job{ID: "a", Channel: "sms", Attempt: 1}
-	send := sendFunc(func(context.Context, delivery.Job) error { t.Fatal("sent while quota unavailable"); return nil })
-	if err := process(t.Context(), testJobs{job}, send, limiter{client: client, prefix: "test:"}, event{ID: "a", Attempt: 1}, time.Now().Add(time.Second)); err == nil {
-		t.Fatal("expected quota error")
+	ctx, stop := context.WithCancel(t.Context())
+	defer stop()
+	idle := make(chan chan task, 1)
+	handler := make(chan task)
+	idle <- handler
+	results := make(chan error, 1)
+	s := scheduler{quota: limiter{client: client, prefix: "test:"}}
+	s.queues[0].enqueue(batch{tasks: []task{{job: job, result: results, admitBy: time.Now().Add(time.Second)}}})
+	go s.run(ctx, nil, idle)
+	select {
+	case <-handler:
+		t.Fatal("sent without Redis quota")
+	case out := <-results:
+		if out == nil {
+			t.Fatal("expected quota backend error")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("no quota result")
 	}
 }
 
@@ -138,9 +176,19 @@ func TestRedisRollingLimitAcrossReplicas(t *testing.T) {
 	for i := range n {
 		g.Go(func() error {
 			lim := replicas[i%2]
-			permit, err := lim.acquire(ctx, "sms")
-			if err != nil {
-				return err
+			var permit slot
+			for {
+				lease, wait, err := lim.tryAcquire(ctx, "sms")
+				if err != nil {
+					return err
+				}
+				if wait == 0 {
+					permit = lease
+					break
+				}
+				if err := sleep(ctx, wait); err != nil {
+					return err
+				}
 			}
 			if i%5 == 0 {
 				time.Sleep(25 * time.Millisecond)
@@ -229,7 +277,9 @@ func TestKafkaRedeliveryAfterFailedBatch(t *testing.T) {
 			defer stop()
 			in := make(chan batch)
 			result := make(chan error, 1)
-			go func() { result <- consumeBatches(pollCtx, consumer, reader{}, in, &pollWindow{size: 8, cap: 8}) }()
+			go func() {
+				result <- consumeBatches(pollCtx, consumer, reader{}, testJobs{delivery.Job{Channel: "sms", Status: "pending", Attempt: 1}}, in, &pollWindow{size: 8, cap: 8})
+			}()
 			read := func() []task {
 				t.Helper()
 				select {
@@ -248,12 +298,12 @@ func TestKafkaRedeliveryAfterFailedBatch(t *testing.T) {
 				if len(items) != 2 || items[0].record.Offset != 0 || items[1].record.Offset != 1 {
 					t.Fatalf("stage %d: expected both offsets, got %+v", stage, items)
 				}
-				items[1].result <- outcome{record: items[1].record}
+				items[1].result <- nil
 				var lower error
 				if stage == 0 {
 					lower = failed
 				}
-				items[0].result <- outcome{record: items[0].record, err: lower}
+				items[0].result <- lower
 				if stage == 1 {
 					// Seeing the next poll demonstrates the batch commit finished.
 					produce(1)
@@ -261,13 +311,13 @@ func TestKafkaRedeliveryAfterFailedBatch(t *testing.T) {
 					if len(items) != 1 || items[0].record.Offset != 2 {
 						t.Fatalf("stage %d: expected sentinel offset 2", stage)
 					}
-					items[0].result <- outcome{record: items[0].record, err: failed}
+					items[0].result <- failed
 				}
 			case 2:
 				if len(items) != 1 || items[0].record.Offset != 2 {
 					t.Fatal("successful earlier batch was not committed")
 				}
-				items[0].result <- outcome{record: items[0].record, err: failed}
+				items[0].result <- failed
 			}
 			if err := <-result; !errors.Is(err, failed) {
 				t.Errorf("got %v, want temporary failure", err)
@@ -275,4 +325,101 @@ func TestKafkaRedeliveryAfterFailedBatch(t *testing.T) {
 		}()
 	}
 	t.Log("lower offset failure replays offsets 0 and 1; after durable success the next member resumes at offset 2")
+}
+
+// Observe an actual quota denial before introducing another channel. The
+// second job must run on the very handler that was ready for the first.
+type observedQuota struct {
+	quota
+	waiting chan struct{}
+}
+
+func (q observedQuota) tryAcquire(ctx context.Context, channel string) (slot, time.Duration, error) {
+	lease, wait, err := q.quota.tryAcquire(ctx, channel)
+	if wait > 0 {
+		select {
+		case q.waiting <- struct{}{}:
+		default:
+		}
+	}
+	return lease, wait, err
+}
+
+func TestRedisSMSBacklogLeavesHandlerAvailableForEmail(t *testing.T) {
+	addr := os.Getenv("TEST_REDIS_ADDR")
+	if addr == "" {
+		t.Skip("set TEST_REDIS_ADDR to verify channel isolation with real Redis")
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	client := redis.NewClient(&redis.Options{Addr: addr, MaxRetries: -1})
+	defer func() { _ = client.Close() }()
+	limit := limiter{client: client, prefix: fmt.Sprintf("test:isolated:%d:", time.Now().UnixNano())}
+	// Hold the SMS pacing gate far past the test deadline. Redis still has
+	// capacity for email. Clearing this unique key simulates SMS recovery.
+	smsGate := limit.prefix + "{sms}:next"
+	stamp, err := client.Time(ctx).Result()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := client.Set(ctx, smsGate, stamp.Add(time.Minute).UnixMicro(), time.Minute).Err(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = client.Del(context.WithoutCancel(ctx), smsGate).Err() }()
+	q := observedQuota{quota: limit, waiting: make(chan struct{}, 1)}
+	s := scheduler{batchPercent: 20, quota: q}
+	in := make(chan batch)
+	idle := make(chan chan task, 1)
+	handler := make(chan task)
+	idle <- handler
+	stopped := make(chan struct{})
+	go func() {
+		defer close(stopped)
+		s.run(ctx, in, idle)
+	}()
+	defer func() { cancel(); <-stopped }()
+	results := make(chan error, 3)
+	deadline, _ := ctx.Deadline()
+	job := func(id, channel string) task {
+		return task{job: delivery.Job{ID: id, Channel: channel, Attempt: 1}, admitBy: deadline, result: results}
+	}
+	in <- batch{route: route{1, bulkLane}, tasks: []task{job("sms-1", "sms"), job("sms-2", "sms")}}
+	select {
+	case <-q.waiting:
+	case <-ctx.Done():
+		t.Fatal("SMS did not encounter the quota gate")
+	}
+	in <- batch{route: route{1, bulkLane}, tasks: []task{job("email-1", "email")}}
+	var sent []string
+	provider := sendFunc(func(_ context.Context, job delivery.Job) error {
+		sent = append(sent, job.ID)
+		return nil
+	})
+	runOne := func(want string) {
+		t.Helper()
+		select {
+		case item := <-handler:
+			if item.job.ID != want {
+				t.Fatalf("handler got %s, want %s", item.job.ID, want)
+			}
+			if err := send(ctx, provider, limit, item); err != nil {
+				t.Fatal(err)
+			}
+		case failed := <-results:
+			t.Fatalf("unexpected admission failure: %v", failed)
+		case <-ctx.Done():
+			t.Fatalf("handler did not receive %s", want)
+		}
+	}
+	runOne("email-1")
+	if err := client.Del(ctx, smsGate).Err(); err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []string{"sms-1", "sms-2"} {
+		idle <- handler
+		runOne(id)
+	}
+	if !slices.Equal(sent, []string{"email-1", "sms-1", "sms-2"}) {
+		t.Fatalf("provider calls %v", sent)
+	}
 }
