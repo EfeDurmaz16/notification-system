@@ -73,7 +73,11 @@ func run(ctx context.Context, args []string) error {
 	}
 	defer func() { _ = db.Close() }()
 	if mode == "api" {
-		return serve(ctx, env("HTTP_ADDR", ":8080"), observability.HTTP(api.New(db)))
+		limit, err := strconv.Atoi(env("WS_MAX_SUBSCRIPTIONS", strconv.Itoa(api.DefaultSubscriptionLimit)))
+		if err != nil || limit < 1 || limit > 1024 {
+			return errors.New("WS_MAX_SUBSCRIPTIONS must be between 1 and 1024")
+		}
+		return serve(ctx, env("HTTP_ADDR", ":8080"), observability.HTTP(api.NewWithSubscriptionLimit(db, limit)))
 	}
 	workers, err := strconv.Atoi(env("WORKER_CONCURRENCY", "32"))
 	if err != nil || workers < 1 || workers > 512 {

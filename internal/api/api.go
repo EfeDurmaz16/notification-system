@@ -26,6 +26,8 @@ import (
 type Repository interface {
 	Create(context.Context, string, []byte, store.Ingress, []store.Item) (store.BatchResult, error)
 	Get(context.Context, string) (store.Notification, error)
+	Snapshots(context.Context, []string) (map[string]store.Notification, error)
+	History(context.Context, string, int64) (store.HistoryPage, error)
 	GetBatch(context.Context, string) (store.BatchResult, error)
 	Cancel(context.Context, string) error
 	List(context.Context, store.Filter) ([]store.Notification, error)
@@ -37,17 +39,35 @@ type server struct{ repo Repository }
 
 // New creates a handler without starting a listener or background goroutines.
 func New(repo Repository) http.Handler {
+	return NewWithSubscriptionLimit(repo, DefaultSubscriptionLimit)
+}
+
+const DefaultSubscriptionLimit = 32
+
+// NewWithSubscriptionLimit bounds the number of open WebSockets per API process.
+func NewWithSubscriptionLimit(repo Repository, limit int) http.Handler {
 	s := server{repo}
 	mux := http.NewServeMux()
-	mux.HandleFunc("POST /v1/notifications", s.create)
-	mux.HandleFunc("POST /v1/batches", s.create)
-	mux.HandleFunc("GET /v1/notifications", s.list)
-	mux.HandleFunc("GET /v1/notifications/{id}", withID(s.get))
-	mux.HandleFunc("GET /v1/batches/{id}", withID(s.batch))
-	mux.HandleFunc("POST /v1/notifications/{id}/cancel", withID(s.cancel))
-	mux.HandleFunc("GET /v1/notifications/{id}/events", withID(limitSubscriptions(32, s.events)))
-	mux.HandleFunc("GET /metrics", s.metrics)
-	mux.HandleFunc("GET /healthz", s.health)
+	// Bound database work before the HTTP server's write timeout, including
+	// when a client keeps its connection open. WebSockets have separate timers.
+	handle := func(pattern string, handler http.HandlerFunc) {
+		mux.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
+			ctx, cancel := context.WithTimeout(r.Context(), 25*time.Second)
+			defer cancel()
+			handler(w, r.WithContext(ctx))
+		})
+	}
+	create := limitCreateBodies(s.create)
+	handle("POST /v1/notifications", create)
+	handle("POST /v1/batches", create)
+	handle("GET /v1/notifications", s.list)
+	handle("GET /v1/notifications/{id}", withID(s.get))
+	handle("GET /v1/notifications/{id}/history", withID(s.history))
+	handle("GET /v1/batches/{id}", withID(s.batch))
+	handle("POST /v1/notifications/{id}/cancel", withID(s.cancel))
+	mux.HandleFunc("GET /v1/notifications/{id}/events", withID(limitSubscriptions(limit, newSnapshotFeed(repo).events)))
+	handle("GET /metrics", s.metrics)
+	handle("GET /healthz", s.health)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		correlation := r.Header.Get("X-Correlation-ID")

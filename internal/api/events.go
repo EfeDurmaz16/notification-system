@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"net/http"
 	"time"
 
@@ -23,9 +24,11 @@ func limitSubscriptions(limit int, next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-func (s server) events(w http.ResponseWriter, r *http.Request) {
+func (feed *snapshotFeed) events(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	n, err := s.repo.Get(r.Context(), id)
+	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+	n, err := feed.repo.Get(ctx, id)
+	cancel()
 	if err != nil {
 		repositoryError(w, err)
 		return
@@ -51,8 +54,8 @@ func (s server) events(w http.ResponseWriter, r *http.Request) {
 		// part of this read-only subscription and terminates the session.
 		_, _, _ = c.NextReader()
 	}()
-	poll := time.NewTicker(250 * time.Millisecond)
-	defer poll.Stop()
+	updates, unsubscribe := feed.subscribe(n.ID)
+	defer unsubscribe()
 	keepAlive := time.NewTicker(15 * time.Second)
 	defer keepAlive.Stop()
 	lastStatus := ""
@@ -81,9 +84,9 @@ func (s server) events(w http.ResponseWriter, r *http.Request) {
 			if err := c.WriteControl(websocket.PingMessage, nil, time.Now().Add(3*time.Second)); err != nil {
 				return
 			}
-		case <-poll.C:
-			n, err = s.repo.Get(r.Context(), id)
-			if err != nil {
+		case update := <-updates:
+			n = update.notification
+			if update.err != nil {
 				_ = c.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseInternalServerErr, "status unavailable"), time.Now().Add(time.Second))
 				return
 			}
