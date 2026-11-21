@@ -1,0 +1,10 @@
+{
+  "checkedUtc": "2026-11-21T11:46:19.948625+00:00",
+  "zeroRateSeries": 9,
+  "retainedLifetimeOutcomes": {
+    "accepted": 2095250,
+    "failed": 43350,
+    "unknown": 28900,
+    "cancelled": 0
+  }
+}

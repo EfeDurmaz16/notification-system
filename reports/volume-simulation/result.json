@@ -1,0 +1,47 @@
+{
+  "startedUTC": "2026-11-21T11:43:16.761667+00:00",
+  "finishedUTC": "2026-11-21T11:43:24.454933+00:00",
+  "verifiedRecentCounts": {
+    "sms": {
+      "accepted": 2450,
+      "failed": 25,
+      "unknown": 25
+    },
+    "email": {
+      "accepted": 2425,
+      "failed": 50,
+      "unknown": 25
+    },
+    "push": {
+      "accepted": 2375,
+      "failed": 75,
+      "unknown": 50
+    }
+  },
+  "requestMs": {
+    "baseline": [
+      412.082,
+      409.825,
+      404.629,
+      405.05,
+      415.585,
+      408.97,
+      413.962,
+      411.994
+    ],
+    "current": [
+      450.676,
+      431.309,
+      448.859,
+      436.484,
+      445.642,
+      437.999,
+      451.569,
+      441.993
+    ]
+  },
+  "medianRequestMs": {
+    "baseline": 410.9095,
+    "current": 443.8175
+  }
+}
