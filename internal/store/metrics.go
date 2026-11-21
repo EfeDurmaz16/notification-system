@@ -6,30 +6,49 @@ import (
 
 type Metrics struct {
 	Counts               map[string]int64
+	FiveMinuteOutcomes   map[ChannelOutcome]int64
 	OldestPendingSeconds float64
 	LatencyBuckets       map[float64]int64
 	LatencySumSeconds    float64
 	LatencyCount         int64
 }
 
+type ChannelOutcome struct {
+	Channel string
+	Status  string
+}
+
 func (s *Store) Metrics(ctx context.Context) (Metrics, error) {
-	m := Metrics{Counts: map[string]int64{}, LatencyBuckets: map[float64]int64{}}
-	rows, err := s.db.QueryContext(ctx, `SELECT status,count(*),GREATEST(0,EXTRACT(EPOCH FROM now()-min(created_at)))
-        FROM notifications GROUP BY status`)
+	m := Metrics{
+		Counts:             make(map[string]int64),
+		FiveMinuteOutcomes: make(map[ChannelOutcome]int64),
+		LatencyBuckets:     make(map[float64]int64),
+	}
+	// Notifications are immutable after their terminal transition, so updated_at
+	// is the recorded outcome time even when creation or earlier attempts are old.
+	rows, err := s.db.QueryContext(ctx, `SELECT channel, status, count(*),
+        GREATEST(0, EXTRACT(EPOCH FROM statement_timestamp() - min(created_at))),
+        count(*) FILTER (WHERE status IN ('accepted','failed','unknown')
+            AND updated_at > statement_timestamp() - interval '5 minutes'
+            AND updated_at <= statement_timestamp())
+        FROM notifications GROUP BY channel, status`)
 	if err != nil {
 		return m, err
 	}
 	for rows.Next() {
-		var status string
-		var count int64
+		var outcome ChannelOutcome
+		var count, recent int64
 		var age float64
-		if err = rows.Scan(&status, &count, &age); err != nil {
+		if err = rows.Scan(&outcome.Channel, &outcome.Status, &count, &age, &recent); err != nil {
 			rows.Close()
 			return m, err
 		}
-		m.Counts[status] = count
-		if status == "pending" {
-			m.OldestPendingSeconds = age
+		m.Counts[outcome.Status] += count
+		if recent > 0 {
+			m.FiveMinuteOutcomes[outcome] = recent
+		}
+		if outcome.Status == "pending" {
+			m.OldestPendingSeconds = max(m.OldestPendingSeconds, age)
 		}
 	}
 	if err = rows.Err(); err != nil {
