@@ -78,8 +78,8 @@ contract:
 integration:
 	PROVIDER_URL=http://provider:8081/send PROVIDER_IDEMPOTENT=false $(COMPOSE) up --build -d --wait --wait-timeout 300
 	python3 -B scripts/check-routing.py
-	TEST_DATABASE_URL="$(TEST_DATABASE_URL)" $(GO) test -race -count=1 -v ./internal/store
-	TEST_KAFKA_BROKER="$(TEST_KAFKA_BROKER)" TEST_REDIS_ADDR="$(TEST_REDIS_ADDR)" $(GO) test -race -count=1 -v ./internal/stream
+	TEST_DATABASE_URL="$(TEST_DATABASE_URL)" $(GO) test -race -cover -count=1 -v ./internal/store
+	TEST_KAFKA_BROKER="$(TEST_KAFKA_BROKER)" TEST_REDIS_ADDR="$(TEST_REDIS_ADDR)" $(GO) test -race -cover -count=1 -v ./internal/stream
 	$(MAKE) smoke contract
 	python3 scripts/check-outcome-report.py
 
