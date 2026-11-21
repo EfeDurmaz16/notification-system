@@ -2,6 +2,27 @@
 
 Begin with the [assessment checklist](assessment-requirements.md) for the implementation and the [verification guide](../docs/verification.md) to run it on your checkout. The experiments below used a synthetic provider. Their latency ends when the service records a provider acknowledgement.
 
+## Standalone channel isolation
+
+Each run submitted 30 standalone emails at normal priority in three conditions. The backlog case admitted 1,500 standalone SMS requests first. The cooldown case held 180 SMS in the shared channel limiter for 12 seconds. One worker with 24 slots served all channels. Each column lists two fresh local Compose runs. [Measurements and image IDs](standalone-isolation.json)
+
+| Measurement | Shared standalone topic `4ca75cc` | Per-channel standalone topics `24e727d` |
+| --- | --- | --- |
+| Email p95 on an idle system | 473 / 548 ms | 434 / 519 ms |
+| Email p95 behind the SMS burst | 17.27 / 17.31 s | 562 / 460 ms |
+| SMS completions/s across that burst | 81.74 / 81.50 | 77.14 / 77.03 |
+| Email p95 with SMS paused | 14.00 / 13.77 s | 442 / 484 ms |
+| Emails accepted before the first paused SMS was claimed | 0 of 30 in both runs | 30 of 30 in both runs |
+
+The first email entered with 1,451 to 1,457 SMS outstanding. Across all four runs, each of 7,080 API IDs had one provider POST and one persisted acceptance. The observed peak was 87 POSTs for one channel in a rolling second. SMS burst throughput fell by 5.6% and 5.5% in the two comparisons.
+
+```sh
+python3 -B scripts/single-channel-isolation.py --revision 4ca75cc --out .local/results/single-baseline.json
+python3 -B scripts/single-channel-isolation.py --revision 24e727d --out .local/results/single-candidate.json
+```
+
+## Other experiments
+
 | Question | Recorded observation | Reproduce |
 | --- | --- | --- |
 | Can a cancellation race cause a send? | When cancellation won the conditional database update, the provider received zero POSTs. A separate hard-stop test found six unresolved IDs that reached the provider before the worker died. [Per-ID audit](https://github.com/EfeDurmaz16/notification-system/blob/4ca75cc/reports/channel-cutover/rebalance/README.md) | `make ci`, `make rebalance` |

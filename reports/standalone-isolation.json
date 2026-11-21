@@ -1,0 +1,254 @@
+{
+  "fixture": "One fresh Docker Compose project per run, one worker with 24 slots, local HTTP fixture with 20 ms delay. All requests are normal-priority standalone submissions.",
+  "order": [
+    "baseline",
+    "baseline-repeat",
+    "candidate",
+    "candidate-repeat"
+  ],
+  "runs": {
+    "baseline": {
+      "source": "4ca75cc9c4dca3265da3888553d880be324e7059",
+      "imageId": "sha256:96e3bb0d921693fcde09ecf8f38cb7b6092254f9334a498f6f66f8b605164176",
+      "workerReplicas": 1,
+      "workerConcurrency": 24,
+      "providerLatencyMs": 20,
+      "cases": [
+        {
+          "case": "idle",
+          "acceptedIdsChecked": 30,
+          "providerPosts": 30,
+          "smsOutstandingAtFirstEmail": 0,
+          "emailCreateToAcceptance": {
+            "n": 30,
+            "p50Ms": 308.748,
+            "p95Ms": 472.677,
+            "p99Ms": 481.425
+          },
+          "peakProviderPostsInRollingSecond": {
+            "email": 30
+          }
+        },
+        {
+          "case": "backlog",
+          "acceptedIdsChecked": 1530,
+          "providerPosts": 1530,
+          "smsOutstandingAtFirstEmail": 1455,
+          "emailCreateToAcceptance": {
+            "n": 30,
+            "p50Ms": 12909.341,
+            "p95Ms": 17270.53,
+            "p99Ms": 17282.916
+          },
+          "peakProviderPostsInRollingSecond": {
+            "email": 12,
+            "sms": 87
+          },
+          "smsCompletionRatePerSecond": 81.74
+        },
+        {
+          "case": "cooldown",
+          "acceptedIdsChecked": 210,
+          "providerPosts": 210,
+          "smsOutstandingAtFirstEmail": 180,
+          "emailCreateToAcceptance": {
+            "n": 30,
+            "p50Ms": 13493.87,
+            "p95Ms": 14002.231,
+            "p99Ms": 14015.524
+          },
+          "peakProviderPostsInRollingSecond": {
+            "email": 30,
+            "sms": 85
+          },
+          "smsCompletionRatePerSecond": 12.79,
+          "cooldownMsRemainingAfterEmailSubmissions": 11711,
+          "emailsAcceptedBeforeFirstSmsClaim": 0
+        }
+      ]
+    },
+    "baseline-repeat": {
+      "source": "4ca75cc9c4dca3265da3888553d880be324e7059",
+      "routing": "channel",
+      "imageId": "sha256:fafd4fc03db49e474be6e21210cab33b8fed1f221f8b8bdc6e4d14ab7af5f452",
+      "workerReplicas": 1,
+      "workerConcurrency": 24,
+      "providerLatencyMs": 20,
+      "cases": [
+        {
+          "case": "idle",
+          "acceptedIdsChecked": 30,
+          "providerPosts": 30,
+          "smsOutstandingAtFirstEmail": 0,
+          "emailCreateToAcceptance": {
+            "n": 30,
+            "p50Ms": 355.241,
+            "p95Ms": 548.202,
+            "p99Ms": 553.941
+          },
+          "peakProviderPostsInRollingSecond": {
+            "email": 30
+          }
+        },
+        {
+          "case": "backlog",
+          "acceptedIdsChecked": 1530,
+          "providerPosts": 1530,
+          "smsOutstandingAtFirstEmail": 1451,
+          "emailCreateToAcceptance": {
+            "n": 30,
+            "p50Ms": 12953.631,
+            "p95Ms": 17311.872,
+            "p99Ms": 17316.37
+          },
+          "peakProviderPostsInRollingSecond": {
+            "email": 13,
+            "sms": 87
+          },
+          "smsCompletionRatePerSecond": 81.5
+        },
+        {
+          "case": "cooldown",
+          "acceptedIdsChecked": 210,
+          "providerPosts": 210,
+          "smsOutstandingAtFirstEmail": 180,
+          "emailCreateToAcceptance": {
+            "n": 30,
+            "p50Ms": 13600.384,
+            "p95Ms": 13769.793,
+            "p99Ms": 13778.168
+          },
+          "peakProviderPostsInRollingSecond": {
+            "email": 30,
+            "sms": 84
+          },
+          "smsCompletionRatePerSecond": 12.77,
+          "cooldownMsRemainingAfterEmailSubmissions": 11706,
+          "emailsAcceptedBeforeFirstSmsClaim": 0
+        }
+      ]
+    },
+    "candidate": {
+      "source": "24e727d8486c58462fa2bde7bbcd90f6eb33b740",
+      "routing": "isolated",
+      "imageId": "sha256:55f35e1bcce4cd8de3101db21984453e43e1c2293bfd76a74c4c69a414e994a6",
+      "workerReplicas": 1,
+      "workerConcurrency": 24,
+      "providerLatencyMs": 20,
+      "cases": [
+        {
+          "case": "idle",
+          "acceptedIdsChecked": 30,
+          "providerPosts": 30,
+          "smsOutstandingAtFirstEmail": 0,
+          "emailCreateToAcceptance": {
+            "n": 30,
+            "p50Ms": 233.432,
+            "p95Ms": 433.887,
+            "p99Ms": 445.507
+          },
+          "peakProviderPostsInRollingSecond": {
+            "email": 30
+          }
+        },
+        {
+          "case": "backlog",
+          "acceptedIdsChecked": 1530,
+          "providerPosts": 1530,
+          "smsOutstandingAtFirstEmail": 1453,
+          "emailCreateToAcceptance": {
+            "n": 30,
+            "p50Ms": 313.349,
+            "p95Ms": 561.663,
+            "p99Ms": 574.732
+          },
+          "peakProviderPostsInRollingSecond": {
+            "email": 30,
+            "sms": 82
+          },
+          "smsCompletionRatePerSecond": 77.14
+        },
+        {
+          "case": "cooldown",
+          "acceptedIdsChecked": 210,
+          "providerPosts": 210,
+          "smsOutstandingAtFirstEmail": 180,
+          "emailCreateToAcceptance": {
+            "n": 30,
+            "p50Ms": 264.046,
+            "p95Ms": 442.475,
+            "p99Ms": 458.132
+          },
+          "peakProviderPostsInRollingSecond": {
+            "email": 30,
+            "sms": 81
+          },
+          "smsCompletionRatePerSecond": 12.65,
+          "cooldownMsRemainingAfterEmailSubmissions": 11695,
+          "emailsAcceptedBeforeFirstSmsClaim": 30
+        }
+      ]
+    },
+    "candidate-repeat": {
+      "source": "24e727d8486c58462fa2bde7bbcd90f6eb33b740",
+      "routing": "isolated",
+      "imageId": "sha256:635d9a23b7b8b85295b5f6b7e8ea7be09bd74a90400db4f82e13290271f8f782",
+      "workerReplicas": 1,
+      "workerConcurrency": 24,
+      "providerLatencyMs": 20,
+      "cases": [
+        {
+          "case": "idle",
+          "acceptedIdsChecked": 30,
+          "providerPosts": 30,
+          "smsOutstandingAtFirstEmail": 0,
+          "emailCreateToAcceptance": {
+            "n": 30,
+            "p50Ms": 347.856,
+            "p95Ms": 519.087,
+            "p99Ms": 532.936
+          },
+          "peakProviderPostsInRollingSecond": {
+            "email": 30
+          }
+        },
+        {
+          "case": "backlog",
+          "acceptedIdsChecked": 1530,
+          "providerPosts": 1530,
+          "smsOutstandingAtFirstEmail": 1457,
+          "emailCreateToAcceptance": {
+            "n": 30,
+            "p50Ms": 292.913,
+            "p95Ms": 459.751,
+            "p99Ms": 466.514
+          },
+          "peakProviderPostsInRollingSecond": {
+            "email": 30,
+            "sms": 83
+          },
+          "smsCompletionRatePerSecond": 77.03
+        },
+        {
+          "case": "cooldown",
+          "acceptedIdsChecked": 210,
+          "providerPosts": 210,
+          "smsOutstandingAtFirstEmail": 180,
+          "emailCreateToAcceptance": {
+            "n": 30,
+            "p50Ms": 309.363,
+            "p95Ms": 483.715,
+            "p99Ms": 484.85
+          },
+          "peakProviderPostsInRollingSecond": {
+            "email": 30,
+            "sms": 81
+          },
+          "smsCompletionRatePerSecond": 12.68,
+          "cooldownMsRemainingAfterEmailSubmissions": 11652,
+          "emailsAcceptedBeforeFirstSmsClaim": 30
+        }
+      ]
+    }
+  }
+}
