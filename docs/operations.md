@@ -8,7 +8,7 @@ Start with the API notification ID, batch ID, channel and status. Use the config
 | scheduled / retry_wait | The due time, DB scheduler and remaining attempts | A new ready event appears when the scheduler promotes the job. |
 | sending | Worker logs for the notification ID and its trace; provider request history | A response resolves the attempt, or stale-send recovery applies the configured contract. |
 | failed | Worker log field `reason`, HTTP status and attempt number | Inspect the explicit rejection or exhausted pre-send failures. |
-| unknown | Original notification ID, timestamps, trace and provider evidence | Investigate before another submission. The captured Webhook.site header is `X-Notification-ID`. A missing search match is inconclusive. |
+| unknown | Original notification ID, timestamps, trace and provider evidence | [Check the Webhook.site request history](#checking-an-unknown-notification-in-webhooksite) if the worker used that provider. |
 | accepted | Persisted provider message ID | The simulated provider accepted the request. There are no recipient delivery receipts in the assessment protocol. |
 
 The following commands read the running Compose stack. Replace `delivery.normal` or the connector name if configured differently.
@@ -24,6 +24,23 @@ docker compose logs --since 5m worker
 Redis unavailability prevents new permits. Durable work can keep entering PostgreSQL during a Kafka outage. Once the connector resumes, the outbox replays through Kafka. Repeated ready records reuse the same notification and generation. Malformed records are quarantined with source coordinates in `notifications.invalid`.
 
 Keep an eye on the age of pending work and available disk, especially for extended outages. Admission can eventually fail when PostgreSQL runs out of storage. Compose uses one broker and one database; its interruption tests exercise process recovery on persistent volumes. The suite records the tested conditions and times in [reports](../reports/).
+
+## Checking an unknown notification in Webhook.site
+
+1. Find the affected notification in the API response and copy its `items[].id`. The worker sends that value in the `X-Notification-ID` header.
+
+   ```sh
+   curl -fsS "${API_URL:-http://127.0.0.1:8080}/v1/notifications?status=unknown&limit=20"
+   ```
+
+2. Open the Webhook.site inbox for the URL that the affected worker used at the time of the attempt. Paste the filter below into the request search and replace `<notification-id>` with the copied UUID, keeping the quotes. A default Compose run sends to the local simulator and has no Webhook.site history. [Webhook.site search syntax](https://docs.webhook.site/api/requests.html#search-query-examples)
+
+   ```text
+   method:POST AND headers.x-notification-id:"<notification-id>"
+   ```
+
+3. If a request matches, check its header and record the capture UUID and timestamp with the investigation. This confirms HTTP arrival. Keep the notification `unknown` until an authoritative provider receipt confirms acceptance. Multiple matches are evidence of multiple HTTP requests.
+4. If nothing matches, verify the inbox and the time range. History may have expired or been deleted. Keep the outcome `unknown`. An empty result does not justify a resend. [Provider evidence and retry policy](decision-history.md#what-can-a-replacement-worker-learn-after-a-lost-acknowledgement)
 
 ## Stopping a worker
 
