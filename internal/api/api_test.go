@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/EfeDurmaz16/notification-system/internal/observability"
 	"github.com/EfeDurmaz16/notification-system/internal/store"
 	"github.com/gorilla/websocket"
 )
@@ -24,17 +25,18 @@ const (
 )
 
 type repositoryStub struct {
-	mu      sync.Mutex
-	ingress store.Ingress
-	items   []store.Item
-	hash    []byte
-	result  store.BatchResult
-	item    store.Notification
-	filter  store.Filter
-	err     error
+	correlationID string
+	mu            sync.Mutex
+	ingress       store.Ingress
+	items         []store.Item
+	hash          []byte
+	result        store.BatchResult
+	item          store.Notification
+	filter        store.Filter
+	err           error
 }
 
-func (s *repositoryStub) Create(_ context.Context, _ string, hash []byte, ingress store.Ingress, items []store.Item) (store.BatchResult, error) {
+func (s *repositoryStub) Create(ctx context.Context, _ string, hash []byte, ingress store.Ingress, items []store.Item) (store.BatchResult, error) {
 	if s.err != nil {
 		return store.BatchResult{}, s.err
 	}
@@ -44,6 +46,7 @@ func (s *repositoryStub) Create(_ context.Context, _ string, hash []byte, ingres
 		}
 		return s.result, nil
 	}
+	s.correlationID = observability.CorrelationID(ctx)
 	s.hash, s.items, s.ingress = hash, items, ingress
 	s.result = store.BatchResult{BatchID: validID}
 	for i, v := range items {
@@ -98,7 +101,7 @@ func TestPartialBatchAndReplay(t *testing.T) {
 	if w.Code != 202 {
 		t.Fatalf("status %d, body %s", w.Code, w.Body.String())
 	}
-	if w.Header().Get("X-Correlation-ID") != "test-request" {
+	if w.Header().Get("X-Correlation-ID") != "test-request" || s.correlationID != "test-request" {
 		t.Fatal("correlation ID missing")
 	}
 	var result store.BatchResult
@@ -286,8 +289,9 @@ func TestWebSocketStatusSnapshots(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
-	defer c.Close()
+	upgradeBody := resp.Body
+	defer func() { _ = upgradeBody.Close() }()
+	defer func() { _ = c.Close() }()
 	_ = c.SetReadDeadline(time.Now().Add(3 * time.Second))
 	var n store.Notification
 	if err = c.ReadJSON(&n); err != nil || n.Status != "pending" {
@@ -307,8 +311,12 @@ func TestWebSocketStatusSnapshots(t *testing.T) {
 	if err == nil || resp == nil || resp.StatusCode != 403 {
 		t.Fatal("expected cross-origin rejection", resp, err)
 	}
-	io.Copy(io.Discard, resp.Body)
-	resp.Body.Close()
+	if _, err := io.Copy(io.Discard, resp.Body); err != nil {
+		t.Error(err)
+	}
+	if err := resp.Body.Close(); err != nil {
+		t.Error(err)
+	}
 }
 
 func BenchmarkValidateSMS(b *testing.B) {

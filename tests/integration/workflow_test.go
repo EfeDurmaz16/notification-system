@@ -28,7 +28,10 @@ type batchResult struct {
 	BatchID string
 	Items   []batchItem
 }
-type notification struct{ ID, Status, Content, MessageID string }
+type notification struct {
+	ID, Status, Content, MessageID, LastReason string
+	ProviderHTTPStatus                         *int
+}
 
 func TestWorkflow(t *testing.T) {
 	if os.Getenv("RUN_SMOKE") != "1" {
@@ -62,7 +65,7 @@ func TestWorkflow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 	if err := conn.SetReadDeadline(time.Now().Add(10 * time.Second)); err != nil {
 		t.Fatal(err)
 	}
@@ -83,20 +86,29 @@ func TestWorkflow(t *testing.T) {
 	t.Log("verified scheduled template, idempotent replay, conflict and WebSocket cancellation")
 
 	// A valid batch item traverses PostgreSQL, CDC, Kafka and the provider.
-	batch := `{"notifications":[{"recipient":"+12025550111","channel":"sms","priority":"high","content":"Integration check"},{"recipient":"bad","channel":"sms","priority":"low","content":"invalid recipient"}]}`
+	batch := `{"notifications":[
+		{"recipient":"+12025550111","channel":"sms","priority":"high","content":"Integration check"},
+		{"recipient":"bad","channel":"sms","priority":"low","content":"invalid recipient"},
+		{"recipient":"+12025550111","channel":"sms","priority":"low","content":"invalid year","scheduledAt":"0000-01-01T00:00:00Z"}
+	]}`
 	var b, repeat batchResult
 	call(t, client, "POST", api+"/v1/batches", key+"-partial", batch, 202, &b)
 	call(t, client, "POST", api+"/v1/batches", key+"-partial", batch, 202, &repeat)
-	if !reflect.DeepEqual(b, repeat) || len(b.Items) != 2 || b.BatchID == "" || b.Items[0].ID == "" || b.Items[0].Index != 0 || b.Items[1].Index != 1 || b.Items[1].Error == "" || b.Items[1].ID != "" {
+	if !reflect.DeepEqual(b, repeat) || len(b.Items) != 3 || b.BatchID == "" || b.Items[0].ID == "" || b.Items[0].Index != 0 {
 		t.Fatalf("partial batch replay: %+v, %+v", b, repeat)
 	}
+	for i := 1; i < len(b.Items); i++ {
+		if b.Items[i].Index != i || b.Items[i].Error == "" || b.Items[i].ID != "" {
+			t.Fatalf("invalid batch item %d: %+v", i, b.Items[i])
+		}
+	}
 	received := awaitStatus(t, client, api+"/v1/notifications/"+b.Items[0].ID, "accepted")
-	if received.MessageID == "" {
-		t.Fatal("provider acceptance missing messageId")
+	if received.MessageID == "" || received.LastReason != "provider_accepted" || received.ProviderHTTPStatus == nil || *received.ProviderHTTPStatus != 202 {
+		t.Fatalf("missing provider acceptance evidence: %+v", received)
 	}
 	var fetched batchResult
 	call(t, client, "GET", api+"/v1/batches/"+b.BatchID, "", "", 200, &fetched)
-	if len(fetched.Items) != 2 || fetched.Items[0].ID != received.ID {
+	if len(fetched.Items) != len(b.Items) || fetched.Items[0].ID != received.ID {
 		t.Fatalf("batch query dropped accepted item: %+v", fetched)
 	}
 	t.Log("verified partial batch, replay and end-to-end provider acceptance")
@@ -114,6 +126,24 @@ func TestWorkflow(t *testing.T) {
 		t.Fatal("replayed batch should produce exactly one provider POST")
 	}
 	t.Log("verified zero actual POSTs for cancelled ID and exactly one for replayed accepted ID")
+
+	// A definitive rejection and a lost acknowledgement are distinguishable
+	// through the same public status resource used by an on-call engineer.
+	for _, tc := range []struct {
+		content, status, reason string
+		httpStatus              int
+	}{
+		{"[mock:reject]", "failed", "provider_rejected", 400},
+		{"[mock:unknown]", "unknown", "transport_outcome_unknown", 0},
+	} {
+		body := fmt.Sprintf(`{"recipient":"+12025550111","channel":"sms","priority":"normal","content":%q}`, tc.content)
+		var item createResult
+		call(t, client, "POST", api+"/v1/notifications", key+"-"+tc.status, body, 202, &item)
+		outcome := awaitStatus(t, client, api+"/v1/notifications/"+item.ID, tc.status)
+		if outcome.LastReason != tc.reason || (tc.httpStatus == 0) != (outcome.ProviderHTTPStatus == nil) || (outcome.ProviderHTTPStatus != nil && *outcome.ProviderHTTPStatus != tc.httpStatus) {
+			t.Fatalf("provider evidence: %+v", outcome)
+		}
+	}
 
 	for _, priority := range []string{"low", "normal", "high"} {
 		t.Run("single_"+priority, func(t *testing.T) {
@@ -164,7 +194,7 @@ func call(t *testing.T, client *http.Client, method, url, key, body string, want
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if err != nil {
 		t.Fatal(err)

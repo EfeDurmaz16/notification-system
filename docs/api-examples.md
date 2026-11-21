@@ -60,6 +60,16 @@ curl -fsS "$API/metrics"
 
 Use a WebSocket client to open `ws://127.0.0.1:8080/v1/notifications/{id}/events`. Frames are current notification snapshots. Reconnect with a fresh status read after interruption. Independent notifications for the same recipient may complete in different orders.
 
+Each API process admits up to 32 concurrent WebSocket subscriptions. Each open subscription
+polls PostgreSQL every 250 ms until the notification reaches a terminal state or the client
+disconnects. When all places are in use, the handshake returns HTTP 503 with `Retry-After: 1`.
+Wait at least that many seconds and reconnect to the same ID, or use the ordinary status endpoint.
+The first frame contains the latest durable state, including a terminal result reached while disconnected.
+
+## Continue a list without skipping through old rows
+
+Request `GET /v1/notifications?channel=email&limit=50`. When the response contains `nextCursor`, pass it as `cursor` on the next request with the same filters. Omit `offset`. The cursor seeks directly after the last creation time and ID, including when several rows have the same creation time. Newer arrivals appear on a fresh first page. A status filter uses each row's current state at the time of the request.
+
 ## Validate the contract
 
 ```sh

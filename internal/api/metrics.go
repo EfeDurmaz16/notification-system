@@ -2,14 +2,14 @@ package api
 
 import (
 	"fmt"
-	"io"
 	"maps"
 	"slices"
+	"strings"
 
 	"github.com/EfeDurmaz16/notification-system/internal/store"
 )
 
-func writeOutcomeMetrics(w io.Writer, m store.Metrics) {
+func writeOutcomeMetrics(w *strings.Builder, m store.Metrics) {
 	// Terminal records are retained. Consumers can derive rates over the
 	// desired interval with rate(notification_outcomes_total[5m]).
 	fmt.Fprintln(w, "# TYPE notification_outcomes_total counter")

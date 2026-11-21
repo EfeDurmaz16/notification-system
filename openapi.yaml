@@ -67,6 +67,7 @@ paths:
         - {name: to, in: query, description: Exclusive upper creation time bound., schema: {type: string, format: date-time}}
         - {name: limit, in: query, schema: {type: integer, minimum: 1, maximum: 100, default: 50}}
         - {name: offset, in: query, schema: {type: integer, minimum: 0, default: 0}}
+        - {name: cursor, in: query, description: Continue from nextCursor with the same filters. Omit offset when using a cursor., schema: {type: string}}
       responses:
         '200':
           description: Matching page.
@@ -81,6 +82,7 @@ paths:
                     items: {$ref: '#/components/schemas/Notification'}
                   limit: {type: integer}
                   offset: {type: integer}
+                  nextCursor: {type: string, description: Present when another matching row exists at query time.}
         '400': {$ref: '#/components/responses/BadRequest'}
         default: {$ref: '#/components/responses/Failure'}
   /v1/notifications/{id}:
@@ -136,6 +138,15 @@ paths:
             text/plain:
               schema: {type: string}
         '404': {$ref: '#/components/responses/NotFound'}
+        '503':
+          description: Storage is unavailable or this API replica is at its subscription limit.
+          headers:
+            Retry-After:
+              description: When at capacity, wait this many seconds before reconnecting.
+              schema: {type: integer}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
         default: {$ref: '#/components/responses/Failure'}
   /v1/batches:
     post:
@@ -143,6 +154,8 @@ paths:
       operationId: createBatch
       summary: Submit up to 1000 notifications with partial acceptance
       description: |
+        Each request accepts up to 1000 items and up to 5 MiB of encoded JSON.
+        Split larger payloads into multiple requests with distinct idempotency keys.
         Results use zero-based input indexes. Invalid recipients or content
         produce item errors. Retry a lost response with the original key and
         original body to recover the same accepted IDs. Each accepted item uses
@@ -261,7 +274,7 @@ components:
         scheduledAt:
           type: string
           format: date-time
-          description: Earliest dispatch time. Past times are eligible immediately.
+          description: Earliest dispatch time. Past times are eligible immediately. The UTC instant must be in years 0001 through 9999 at PostgreSQL microsecond precision.
       example:
         recipient: '+12025550147'
         channel: sms
@@ -279,6 +292,13 @@ components:
         priority: {$ref: '#/components/schemas/Priority'}
         status: {$ref: '#/components/schemas/Status'}
         messageId: {type: string, description: External provider identifier after acceptance.}
+        lastReason:
+          type: string
+          maxLength: 64
+          description: Latest recorded attempt or stale-send recovery reason. Older records can omit this field.
+          example: malformed_ack
+        providerHttpStatus: {type: integer, minimum: 100, maximum: 599, description: HTTP status received in the attempt described by lastReason. Omitted if no response was recorded.}
+        nextAttemptAt: {type: string, format: date-time, description: Earliest scheduled send or retry time while waiting for promotion.}
         attempt: {type: integer, minimum: 0}
         createdAt: {type: string, format: date-time}
         updatedAt: {type: string, format: date-time}
