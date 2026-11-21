@@ -439,13 +439,16 @@ func Run(ctx context.Context, cfg Config, store Store, engine *delivery.Engine) 
 			}
 		})
 	}
+	brokerWarnings := &brokerLog{logger: slog.Default()}
 	for p := range priorities {
 		for _, lane := range [...]ingressLane{bulkLane, singleLane} {
-			group.Go(func() error { return consume(ctx, cfg, reader{route: route{p, lane}}, store, input) })
+			group.Go(func() error { return consume(ctx, cfg, reader{route: route{p, lane}}, store, input, brokerWarnings) })
 		}
 		if cfg.ChannelReaders {
 			for ch := range channels {
-				group.Go(func() error { return consume(ctx, cfg, reader{route{p, bulkLane}, ch + 1}, store, input) })
+				group.Go(func() error {
+					return consume(ctx, cfg, reader{route{p, bulkLane}, ch + 1}, store, input, brokerWarnings)
+				})
 			}
 		}
 	}
@@ -486,11 +489,12 @@ func release(ctx context.Context, limit quota, t task) {
 	}
 }
 
-func consume(ctx context.Context, cfg Config, r reader, store Store, in chan<- batch) error {
+func consume(ctx context.Context, cfg Config, r reader, store Store, in chan<- batch, brokerWarnings *brokerLog) error {
 	topic := "notifications." + r.suffix()
 	window := r.window(cfg.Workers, cfg.BatchSharePercent)
 	for ctx.Err() == nil {
 		client, err := kgo.NewClient(
+			kgo.WithHooks(brokerWarnings),
 			kgo.SeedBrokers(cfg.Brokers...), kgo.ConsumerGroup(cfg.Group+"."+r.suffix()),
 			kgo.ConsumeTopics(topic), kgo.DisableAutoCommit(), kgo.BlockRebalanceOnPoll(),
 			kgo.FetchMaxWait(25*time.Millisecond), kgo.RebalanceTimeout(2*time.Minute),

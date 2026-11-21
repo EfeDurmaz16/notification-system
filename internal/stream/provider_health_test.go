@@ -16,19 +16,27 @@ import (
 
 func TestProviderCooldownRequiresConsecutiveFailuresForOneChannel(t *testing.T) {
 	var health providerHealth
+	now := time.Now()
 	for _, status := range []int{503, 504, 202, 503, 504, 422, 503, 504} {
-		if health.shouldPause("sms", status, "") {
+		if health.shouldPause("sms", status, "", now) {
 			t.Fatalf("healthy response should have reset earlier failures, status=%d", status)
 		}
 	}
-	if health.shouldPause("email", http.StatusServiceUnavailable, "") {
+	if health.shouldPause("email", http.StatusServiceUnavailable, "", now) {
 		t.Fatal("email inherited SMS failures")
 	}
-	if !health.shouldPause("sms", 0, "transport_outcome_unknown") {
+	if !health.shouldPause("sms", 0, "transport_outcome_unknown", now) {
 		t.Fatal("three consecutive SMS endpoint failures should pause new admissions")
 	}
-	if health.shouldPause("sms", http.StatusAccepted, "provider_accepted") {
-		t.Fatal("acceptance should reset the streak")
+	for _, status := range []int{503, 202, 503, 503, 503} {
+		if health.shouldPause("sms", status, "", now.Add(providerPause-time.Millisecond)) {
+			t.Fatal("result from a pre-pause send extended the cooldown")
+		}
+	}
+	for i := range 3 {
+		if got := health.shouldPause("sms", 503, "", now.Add(providerPause)); got != (i == 2) {
+			t.Fatalf("post-cooldown failure %d: new pause = %v", i+1, got)
+		}
 	}
 }
 

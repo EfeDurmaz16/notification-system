@@ -14,37 +14,62 @@ const providerPause = 30 * time.Second
 // Redis calls. Once a replica sees consecutive endpoint failures, all replicas
 // observe the same cooldown when asking Redis for a channel permit.
 type providerHealth struct {
-	mu       sync.Mutex
-	failures map[string]int
-	limit    limiter
+	mu      sync.Mutex
+	streaks map[string]failureStreak
+	limit   limiter
+}
+
+type failureStreak struct {
+	count       int
+	pausedUntil time.Time
 }
 
 func (h *providerHealth) observe(ctx context.Context, channel string, status int, reason string) error {
-	if !h.shouldPause(channel, status, reason) {
+	now := time.Now()
+	if !h.shouldPause(channel, status, reason, now) {
 		return nil
 	}
 	key := h.limit.prefix + "{" + channel + "}:pause"
 	created, err := h.limit.client.SetNX(ctx, key, "1", providerPause).Result()
+	if err != nil {
+		h.mu.Lock()
+		// Restore eligibility after a failed write, but only for our trip.
+		if streak := h.streaks[channel]; streak.pausedUntil.Equal(now.Add(providerPause)) {
+			h.streaks[channel] = failureStreak{count: 2}
+		}
+		h.mu.Unlock()
+	}
 	if created {
 		slog.WarnContext(ctx, "provider admissions paused", "channel", channel, "cooldown", providerPause, "reason", reason, "provider_http_status", status)
 	}
 	return err
 }
 
-func (h *providerHealth) shouldPause(channel string, status int, reason string) bool {
+func (h *providerHealth) shouldPause(channel string, status int, reason string, now time.Time) bool {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	streak := h.streaks[channel]
+	// Results from concurrent sends admitted before the pause must not prime
+	// the next streak. Require three fresh failures when admission resumes.
+	if now.Before(streak.pausedUntil) {
+		return false
+	}
 	// 4xx recipient/content rejections still prove the endpoint is answering.
 	distressed := status >= 500 || status == http.StatusTooManyRequests ||
 		status == http.StatusUnauthorized ||
 		reason == "dial_failed" || reason == "transport_outcome_unknown" || reason == "malformed_ack"
 	if !distressed {
-		delete(h.failures, channel)
+		delete(h.streaks, channel)
 		return false
 	}
-	if h.failures == nil {
-		h.failures = make(map[string]int)
+	if h.streaks == nil {
+		h.streaks = make(map[string]failureStreak)
 	}
-	h.failures[channel] = min(3, h.failures[channel]+1)
-	return h.failures[channel] == 3
+	streak.count++
+	if streak.count == 3 {
+		h.streaks[channel] = failureStreak{pausedUntil: now.Add(providerPause)}
+		return true
+	}
+	h.streaks[channel] = streak
+	return false
 }
