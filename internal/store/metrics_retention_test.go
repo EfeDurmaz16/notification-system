@@ -175,7 +175,7 @@ func TestRetentionScansPastUnresolvedPrefixAndRevisitsIt(t *testing.T) {
 		}()
 	}
 	a, b := <-results, <-results
-	if !((a == "0|1000|1000" && b == "0|0|0") || (b == "0|1000|1000" && a == "0|0|0")) {
+	if min(a, b) != "0|0|0" || max(a, b) != "0|1000|1000" {
 		t.Fatalf("unexpected concurrent pages %q, %q", a, b)
 	}
 }
