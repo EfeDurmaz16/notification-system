@@ -5,8 +5,16 @@ curl -fsS --retry 10 --retry-all-errors --retry-delay 2 -o /dev/null \
     -X PUT -H 'Content-Type: application/json' --data-binary @/deploy/connector.json "$base/config"
 
 # Both the connector and its PostgreSQL task must reach RUNNING.
+body=$(mktemp)
+trap 'rm -f "$body"' EXIT
+status=''
 for _ in $(seq 1 60); do
-    status=$(curl -fsS "$base/status" || true)
+    code=$(curl -sS -o "$body" -w '%{http_code}' "$base/status") || { sleep 2; continue; }
+    case "$code" in
+        200) status=$(cat "$body") ;;
+        404) sleep 2; continue ;; # Kafka Connect has not registered the task yet.
+        *) printf 'Connector status returned HTTP %s\n' "$code" >&2; sleep 2; continue ;;
+    esac
     case "$status" in
         *'"state":"FAILED"'*) printf '%s\n' "$status" >&2; exit 1 ;;
     esac

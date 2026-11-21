@@ -80,7 +80,14 @@ func NewWithSubscriptionLimit(repo Repository, limit int) http.Handler {
 		r = r.WithContext(observability.WithCorrelationID(r.Context(), correlation))
 		response := &accessWriter{ResponseWriter: w, status: http.StatusOK}
 		mux.ServeHTTP(response, r)
-		slog.InfoContext(r.Context(), "http request", "correlation_id", correlation, "trace_id", observability.TraceID(r.Context()), "method", r.Method, "route", r.Pattern, "status", response.status, "duration_ms", time.Since(start).Milliseconds())
+		level := slog.LevelInfo
+		if r.Pattern == "GET /healthz" {
+			level = slog.LevelWarn
+			if response.status == http.StatusOK {
+				level = slog.LevelDebug
+			}
+		}
+		slog.Log(r.Context(), level, "http request", "correlation_id", correlation, "trace_id", observability.TraceID(r.Context()), "method", r.Method, "route", r.Pattern, "status", response.status, "duration_ms", time.Since(start).Milliseconds())
 	})
 }
 
@@ -125,7 +132,7 @@ func repositoryError(w http.ResponseWriter, err error) {
 	case errors.Is(err, store.ErrConflict):
 		problem(w, 409, "request conflicts with existing state")
 	default:
-		slog.Error("repository operation failed", "correlation_id", w.Header().Get("X-Correlation-ID"), "error_type", fmt.Sprintf("%T", err))
+		slog.Error("repository operation failed", "correlation_id", w.Header().Get("X-Correlation-ID"), observability.StorageError(err))
 		problem(w, 503, "storage temporarily unavailable")
 	}
 }
