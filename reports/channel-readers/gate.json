@@ -1,0 +1,19 @@
+{
+  "pairs": [
+    {
+      "pair": 1,
+      "batchPushP95Ms": 186.664,
+      "smsThroughputChangePercent": -5.652477320307058,
+      "pushThresholdPassed": true,
+      "smsThresholdPassed": false
+    },
+    {
+      "pair": 2,
+      "batchPushP95Ms": 245.507,
+      "smsThroughputChangePercent": -6.257480324479858,
+      "pushThresholdPassed": true,
+      "smsThresholdPassed": false
+    }
+  ],
+  "performanceGatePassed": false
+}

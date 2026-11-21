@@ -69,6 +69,8 @@ The client create key identifies API intent. The provider key identifies a singl
 
 ## Verification and packaging
 
+The [assessment checklist](reports/assessment-requirements.md) links each requirement to implementation or observed evidence. The [channel-reader comparison](reports/channel-readers/README.md) explains the batch latency and throughput trade-off behind the release configuration.
+
 In a [15-minute run across all three channels](reports/sustained-mixed/README.md), the API admitted 36,000 notifications per channel. Each channel recorded 35,640 provider acknowledgements, 180 deliberate rejections and 180 lost responses. An independent check found exactly one provider POST for each of the 108,000 IDs. The [restart and recovery tests](reports/final-recovery/README.md) exercise cases where a retry is required.
 
 | Command | Scope |
