@@ -14,7 +14,7 @@ Only outbox INSERTs carry ready events. The rows contain an ID, attempt and trac
 
 The delivery contract keeps notification lookups, batch responses and idempotency keys available indefinitely. These tables grow with admissions. Set customer lookup and replay windows before expiring them. Monitor table sizes and replication-slot WAL lag independently.
 
-An operator can prune old audit transitions and already-published outbox events with `scripts/retention.sql`. Choose a cutoff that satisfies your audit requirements and archive the data first if it must remain available. The command previews one chunk. Supply `-v apply=true` to commit it. Use a cutoff strictly in the past.
+An operator can prune old audit transitions and already-published outbox events with `scripts/retention.sql`. Choose a cutoff that satisfies your audit requirements and archive the data first if it must remain available. The default mode previews a bounded page. Supply `-v apply=true` to process a page from the apply cursor and delete eligible rows. Use a cutoff strictly in the past.
 
 ```sh
 psql "$DATABASE_URL" -X -v before='2026-01-01T00:00:00Z' -f scripts/retention.sql
@@ -39,7 +39,7 @@ Use the same two files and add `RETENTION_APPLY=true` to the first command after
 RETAIN_DAYS=30 docker compose -f docker-compose.yml -f deploy/retention.compose.yml stop retention
 ```
 
-The job considers up to 1,000 old transitions per minute. It retains unresolved histories, current notifications, creation responses and idempotency keys. A status-history request after pruning returns the transitions still retained. The scheduled job supplies no Kafka publication evidence, so outbox cleanup uses the separate verified-ID command above. A sustained rate over 1,000 eligible transitions per minute can outgrow this schedule.
+The job examines up to 1,000 old transitions per minute using the indexed cursor `(changed_at, seq)`. The cutoff stays fixed during each sweep. After the last page, the next pass starts at the oldest retained event, so histories that have since resolved become eligible. Preview and apply keep separate progress rows. A failed transaction advances neither deletions nor progress. Logs show the number examined and the number eligible. It retains unresolved histories, current notifications, creation responses and idempotency keys. A status-history request after pruning returns the transitions still retained. The scheduled job supplies no Kafka publication evidence, so outbox cleanup uses the separate verified-ID command above. A sustained rate over 1,000 eligible transitions per minute can outgrow this schedule.
 
 To check disk use, run `psql "$DATABASE_URL" -X -f scripts/storage-status.sql`. Record table bytes and retained WAL across successive samples. Outbox growth together with increasing unconfirmed WAL is a reason to check the connector and slot before running cleanup. Estimate remaining time from free disk bytes divided by recent growth in bytes per hour. Provision capacity for the full lookup and idempotency horizon.
 
