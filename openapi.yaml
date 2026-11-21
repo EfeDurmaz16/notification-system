@@ -11,7 +11,10 @@ info:
     request correlation ID. The server otherwise generates and returns one.
     Create operations accept UTF-8 JSON bodies up to 5 MiB. Property names
     are case-sensitive. Duplicate keys, unpaired Unicode surrogate escapes
-    and nesting deeper than 64 levels return HTTP 400.
+    and nesting deeper than 64 levels return HTTP 400. A batch item with an
+    ambiguous property reports its zero-based index. Each API replica budgets
+    20 MiB for concurrent create bodies. When full, it returns HTTP 503 with
+    Retry-After before reserving the idempotency key. Retry with the same key.
 servers:
   - url: /
 tags:
@@ -98,6 +101,41 @@ paths:
           content:
             application/json:
               schema: {$ref: '#/components/schemas/Notification'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        default: {$ref: '#/components/responses/Failure'}
+  /v1/notifications/{id}/history:
+    parameters:
+      - $ref: '#/components/parameters/ID'
+    get:
+      tags: [Notifications]
+      operationId: getNotificationHistory
+      summary: Read retained status transitions in recorded order
+      description: Returns up to 50 transitions per page. Continue using nextAfter. An existing notification can have an empty history after audit retention.
+      parameters:
+        - {name: after, in: query, description: Continue after the position from nextAfter., schema: {type: string, pattern: '^[0-9]+$'}}
+      responses:
+        '200':
+          description: Retained transitions for this notification.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    maxItems: 50
+                    items:
+                      type: object
+                      required: [attempt, status, changedAt]
+                      properties:
+                        attempt: {type: integer, minimum: 1}
+                        status: {$ref: '#/components/schemas/Status'}
+                        changedAt: {type: string, format: date-time}
+                        reason: {type: string}
+                        providerHttpStatus: {type: integer, minimum: 100, maximum: 599}
+                  nextAfter: {type: string, description: Included when another event exists., pattern: '^[0-9]+$'}
+        '400': {$ref: '#/components/responses/BadRequest'}
         '404': {$ref: '#/components/responses/NotFound'}
         default: {$ref: '#/components/responses/Failure'}
   /v1/notifications/{id}/cancel:

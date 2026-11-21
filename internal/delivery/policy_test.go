@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -84,6 +86,57 @@ func TestProviderContract(t *testing.T) {
 			}
 			if tc.state == accepted && store.messageID != "msg123" {
 				t.Fatalf("wrong provider ID %s", store.messageID)
+			}
+		})
+	}
+}
+
+func TestReceiptsAndEndpointEvidence(t *testing.T) {
+	const (
+		capture  = "https://webhook.site/fixture"
+		provider = "https://provider.example/send"
+	)
+	for _, tc := range []struct {
+		name, endpoint   string
+		code             int
+		body             string
+		messageIDReceipt bool
+		state, reason    string
+	}{
+		{"empty default response", capture, 200, "", false, unknown, "missing_ack"},
+		{"strict HTTP status", capture, 200, `{"messageId":"id","status":"accepted","timestamp":"2026-01-01T00:00:00Z"}`, false, unknown, "unexpected_ack_status"},
+		{"message ID alone", provider, 201, `{"messageId":"id"}`, true, accepted, "provider_accepted"},
+		{"full HTTP 200 receipt", provider, 200, `{"messageId":"id","status":"accepted","timestamp":"2026-01-01T00:00:00Z"}`, true, accepted, "provider_accepted"},
+		{"optional timestamp", provider, 202, `{"messageId":"id","status":"accepted","timestamp":"ISO8601"}`, true, accepted, "provider_accepted"},
+		{"invalid ID in assessment receipt", capture, 202, `{"messageId":"a\u0000b","status":"accepted","timestamp":"2026-01-01T00:00:00Z"}`, false, unknown, "malformed_ack"},
+		{"invalid ID in message ID receipt", provider, 200, `{"messageId":"a\u0000b"}`, true, unknown, "malformed_ack"},
+		{"empty ID", provider, 200, `{"messageId":"  "}`, true, unknown, "malformed_ack"},
+		{"contradictory status", provider, 201, `{"messageId":"id","status":"rejected"}`, true, unknown, "malformed_ack"},
+		{"null status", provider, 200, `{"messageId":"id","status":null}`, true, unknown, "malformed_ack"},
+		{"missing body", provider, 204, "", true, unknown, "missing_ack"},
+		{"limit body", provider, 200, strings.Repeat(" ", 16<<10) + `{"messageId":"id"}`, true, unknown, "malformed_ack"},
+		{"capture expired", capture, 404, "", false, unknown, "provider_endpoint_access"},
+		{"capture denied", capture, 403, "", false, unknown, "provider_endpoint_access"},
+		{"recipient permission", provider, 403, "", false, failed, "provider_forbidden"},
+		{"recipient not found", provider, 404, "", false, failed, "provider_rejected"},
+		{"error carrying an ID", provider, 503, `{"messageId":"id"}`, true, unknown, "provider_outcome_unknown"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			posts := 0
+			client := &http.Client{Transport: transportFunc(func(*http.Request) (*http.Response, error) {
+				posts++
+				return &http.Response{StatusCode: tc.code, Body: io.NopCloser(strings.NewReader(tc.body))}, nil
+			})}
+			store := new(recordStore)
+			e := Engine{URL: tc.endpoint, Client: client, Store: store, MessageIDReceipt: tc.messageIDReceipt}
+			if err := e.Send(t.Context(), initialJob()); err != nil {
+				t.Fatal(err)
+			}
+			if posts != 1 || store.state != tc.state || store.reason != tc.reason || store.httpStatus != tc.code || !store.due.IsZero() {
+				t.Fatalf("POSTs=%d, store=%+v", posts, store)
+			}
+			if (store.messageID == "id") != (tc.state == accepted) {
+				t.Fatalf("persisted receipt %q, state %s", store.messageID, store.state)
 			}
 		})
 	}

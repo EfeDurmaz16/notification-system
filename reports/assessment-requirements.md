@@ -6,36 +6,36 @@ This checklist covers the notification service, the six optional features and th
 
 | Requirement | Implementation and evidence |
 | --- | --- |
-| Create with recipient, channel, content and priority | The single and batch routes validate these fields and return stable IDs. [API contract checks](api-contract.md) |
-| Create up to 1,000 notifications per request | Per-item validation returns indexed errors. Ten concurrent requests of 1,000 produced the 10,000-SMS test. [Burst results](bench/tuned/summary.md) |
-| Query by notification or batch ID | Both endpoints read committed state. [Live API contract](api-contract.md) |
-| Cancel a pending notification | Cancellation and the first send claim compete for the same row. A successful cancellation produces zero provider POSTs. [Cancellation test](tdd/README.md) |
+| Create with recipient, channel, content and priority | The single and batch routes validate these fields and return stable IDs. [API contract checks](https://github.com/EfeDurmaz16/notification-system/blob/4ca75cc9c4dca3265da3888553d880be324e7059/reports/api-contract.md) |
+| Create up to 1,000 notifications per request | Per-item validation returns indexed errors. Ten concurrent requests of 1,000 produced the 10,000-SMS test. [Burst results](https://github.com/EfeDurmaz16/notification-system/blob/4ca75cc9c4dca3265da3888553d880be324e7059/reports/bench/tuned/summary.md) |
+| Query by notification or batch ID | Both endpoints read committed state. [Live API contract](https://github.com/EfeDurmaz16/notification-system/blob/4ca75cc9c4dca3265da3888553d880be324e7059/reports/api-contract.md) |
+| Cancel a pending notification | Cancellation and the first send claim compete for the same row. A successful cancellation produces zero provider POSTs. [Cancellation test](https://github.com/EfeDurmaz16/notification-system/blob/4ca75cc9c4dca3265da3888553d880be324e7059/reports/tdd/README.md) |
 | Filter by status, channel and date range with pagination | List queries support creation-time bounds and both cursor and limit/offset pagination. [Query implementation](../internal/store/queries.go) and [HTTP tests](../internal/api/api_test.go) |
 | Asynchronous queue workers | The API commits the notification and its outbox event together. Workers claim ready items and persist outcomes before committing offsets. [Delivery path](../README.md#delivery-path) |
-| Maximum 100 messages per second per channel | Replicas share a separate rolling quota for each channel. Retries consume permits. The fixture measured a peak of 50 actual POSTs in a sliding second on each channel in the sustained run. [Per-channel results](sustained-mixed/README.md) |
-| High, normal and low priorities | A weighted scheduler serves all three. Measurements cover competition and progress under load. [Priority experiment](high-p95/README.md) |
+| Maximum 100 messages per second per channel | Replicas share a separate rolling quota for each channel. Retries consume permits. The fixture measured a peak of 50 actual POSTs in a sliding second on each channel in the sustained run. [Per-channel results](https://github.com/EfeDurmaz16/notification-system/blob/4ca75cc9c4dca3265da3888553d880be324e7059/reports/sustained-mixed/README.md) |
+| High, normal and low priorities | A weighted scheduler serves all three. Measurements cover competition and progress under load. [Priority experiment](https://github.com/EfeDurmaz16/notification-system/blob/4ca75cc9c4dca3265da3888553d880be324e7059/reports/high-p95/README.md) |
 | Validate required fields and character limits | Channel-specific recipient checks and limits apply after template expansion. [Validation rules](../internal/api/validate.go) |
-| Prevent duplicate sends | Create keys replay the original IDs. A conditional send claim fences replayed queue events. Provider-side retries after ambiguity require an explicit idempotency guarantee. [Replay tests](api/checks.md) and [recovery results](final-recovery/README.md) |
+| Prevent duplicate sends | Create keys replay the original IDs. A conditional send claim fences replayed queue events. Provider-side retries after ambiguity require an explicit idempotency guarantee. [Replay tests](https://github.com/EfeDurmaz16/notification-system/blob/4ca75cc9c4dca3265da3888553d880be324e7059/reports/api/checks.md) and [recovery results](https://github.com/EfeDurmaz16/notification-system/blob/4ca75cc9c4dca3265da3888553d880be324e7059/reports/final-recovery/README.md) |
 | Design delivery and retry behavior | Confirmed pre-send failures back off with jitter within a retry budget. Rejections, missing acknowledgements and abandoned attempts receive distinct treatment. [State transitions](../docs/decisions.md#state-transitions) |
-| Live queue depth, success/failure rates and latency | One scrape exposes pending depth, acceptance latency and the five-minute accepted, failed and unknown rates for each channel. [Live rate audit](sustained-mixed/window-check.json) |
+| Live queue depth, success/failure rates and latency | One scrape exposes pending depth, acceptance latency and the five-minute accepted, failed and unknown rates for each channel. [Live rate audit](https://github.com/EfeDurmaz16/notification-system/blob/4ca75cc9c4dca3265da3888553d880be324e7059/reports/sustained-mixed/window-check.json) |
 | Structured logs and correlation IDs | JSON request logs contain the correlation ID and trace ID. The worker logs the create correlation ID alongside the notification and trace IDs. [API logging](../internal/api/api.go) and [worker logging](../internal/delivery/engine.go) |
-| Health check | The health endpoint checks database readiness for API admission. Worker and connector health can be inspected separately. [Health contract](../openapi.yaml) |
-| External provider integration | A disposable webhook.site endpoint captured one synthetic **email** POST with `to`, `channel` and `content`. The test checked the configured HTTP 202 accepted response and its provider message ID. The engine validates the acknowledgement timestamp. [Recorded smoke run](webhook-site.md) and [test input](../scripts/webhook-compose.py) |
+| Health check | API health checks database readiness for admission. Each worker has internal liveness and readiness probes. Readiness checks PostgreSQL, Redis and Kafka. [Health contract](../openapi.yaml) |
+| External provider integration | A disposable webhook.site endpoint captured one synthetic **email** POST with `to`, `channel` and `content`. The test checked the configured HTTP 202 accepted response and its provider message ID. The engine validates the acknowledgement timestamp. [Recorded smoke run](https://github.com/EfeDurmaz16/notification-system/blob/4ca75cc9c4dca3265da3888553d880be324e7059/reports/webhook-site.md) and [test input](../scripts/webhook-compose.py) |
 
 ## Capacity and visibility
 
-- The [v1.1.0 release verification](https://github.com/EfeDurmaz16/notification-system/releases/tag/v1.1.0) reconciled 108,000 IDs against actual provider POST counts, including deliberate rejections and lost responses. Consumers can query or watch the resulting status. Operators can inspect rates, logs and traces. [Run and limits](sustained-mixed/README.md)
-- A separate volume experiment seeded 2,160,000 historical notifications across one simulated day and added 7,500 recent outcomes. It verified window expiry and measured scrape cost. Sustained end-to-end delivery for a full day and production provider capacity remain unmeasured. [Volume experiment](volume-simulation/README.md)
+- The [v1.1.0 release verification](https://github.com/EfeDurmaz16/notification-system/releases/tag/v1.1.0) reconciled 108,000 IDs against actual provider POST counts, including deliberate rejections and lost responses. Consumers can query or watch the resulting status. Operators can inspect rates, logs and traces. [Run and limits](https://github.com/EfeDurmaz16/notification-system/blob/4ca75cc9c4dca3265da3888553d880be324e7059/reports/sustained-mixed/README.md)
+- A separate volume experiment seeded 2,160,000 historical notifications across one simulated day and added 7,500 recent outcomes. It verified window expiry and measured scrape cost. Sustained end-to-end delivery for a full day and production provider capacity remain unmeasured. [Volume experiment](https://github.com/EfeDurmaz16/notification-system/blob/4ca75cc9c4dca3265da3888553d880be324e7059/reports/volume-simulation/README.md)
 
 ## Optional features
 
 | Feature | Evidence |
 | --- | --- |
-| Failure handling | [Dependency interruption and recovery](final-recovery/README.md), [invalid-event quarantine](quarantine/README.md) |
+| Failure handling | [Dependency interruption and recovery](https://github.com/EfeDurmaz16/notification-system/blob/4ca75cc9c4dca3265da3888553d880be324e7059/reports/final-recovery/README.md), [invalid-event quarantine](https://github.com/EfeDurmaz16/notification-system/blob/4ca75cc9c4dca3265da3888553d880be324e7059/reports/quarantine/README.md) |
 | Scheduled delivery | [Database-backed scheduling tests](../internal/store/store_test.go) |
 | Templates with variable substitution | [Template and validation tests](../internal/api/api_test.go) |
 | WebSocket updates | [End-to-end status subscription](../tests/integration/workflow_test.go). Clients receive current snapshots and can refetch after reconnect. |
-| Distributed tracing | [Recorded API, worker and provider-client span chain](trace.md) |
+| Distributed tracing | [Recorded API, worker and provider-client span chain](https://github.com/EfeDurmaz16/notification-system/blob/4ca75cc9c4dca3265da3888553d880be324e7059/reports/trace.md) |
 | Automated CI/CD testing and linting | [Test and lint workflow](../.github/workflows/ci.yml) and [tagged release workflow](../.github/workflows/release.yml) |
 
 ## Deliverables

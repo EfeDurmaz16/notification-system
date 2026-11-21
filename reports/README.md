@@ -1,33 +1,41 @@
-# Verification and review guide
+# Review the evidence
 
-The release candidate was exercised with a real PostgreSQL, Kafka, Debezium and Redis stack, plus a local HTTP provider. The external provider contract was checked separately with one synthetic Webhook.site request.
+Begin with the [assessment checklist](assessment-requirements.md) for the implementation and the [verification guide](../docs/verification.md) to run it on your checkout. The experiments below used a synthetic provider. Their latency ends when the service records a provider acknowledgement.
 
-| Question | Evidence |
-|---|---|
-| Does a successful cancellation prevent a provider POST? | [Initial red and green tests](tdd/README.md), [PostgreSQL concurrent claims](store/postgres-integration.txt), [live Compose smoke](ci/compose-smoke.txt) |
-| What did we actually observe under load? | [Before/after priority experiment](bench/comparison.md), [release candidate measurements](bench/tuned/summary.md), [per-ID audit on 10,000 messages](bench/tuned/burst-10000.json), [reference measurements before priority tuning](bench/final/summary.md) |
-| What do SMS, email and push report when they run together for 15 minutes with known errors? | [v1.1.0 channel-reader run and release build provenance](https://github.com/EfeDurmaz16/notification-system/releases/download/v1.1.0/notification-system-verification-report.md), [earlier shared-reader experiment](sustained-mixed/README.md) |
-| What does scraping all metrics cost after a simulated day of retained notifications? | [Database volume experiment](volume-simulation/README.md) |
-| How quickly does a standalone SMS pass a campaign at the same priority, and how fast does the batch progress? | [Ingress share measurements and reproduction](ingress-share/README.md) |
-| What happens to individual sends when one worker dies with both queues backlogged? | [Partition ownership, provider POSTs and per-ID status history](worker-rebalance/README.md) |
-| What happens during an ordinary worker stop while the provider is acknowledging a send? | [Delayed acknowledgement and replacement worker audit](worker-drain/README.md) |
-| Does a malformed Kafka event block the next valid notification? | [Quarantine marker and consumer offset check](quarantine/README.md) |
-| How do the current load, stress and Go benchmarks run? | [Commands, measurements and CI scope](suite-check/README.md) |
-| Can a larger high-priority share bring burst p95 below 64 seconds? | [Priority weight comparison on 10,000 SMS](high-p95/README.md) |
-| When does adding or removing workers help during a traffic wave? | [Latency, backlog and replica use with fixed and changing worker counts](traffic-wave/README.md) |
-| Can a push notification use its channel quota while SMS is backlogged? | [Matched worker experiments across shared and independent Kafka queues](channel-isolation/README.md) |
-| How much time did work spend before the send claim versus at the provider? | [SQL stage breakdown](bench/tuned/burst-10000-stages.tsv), [measurement definitions](../docs/persistence.md#stage-latency-after-a-load-run) |
-| What happens if a dependency stops or a worker dies after acceptance? | [Fault sequence and original results](recovery.md), [release candidate rerun](final-recovery/README.md) |
-| Can an independent client safely replay? | [Request-body identity regression](api/checks.md), [later provider rejection after a lost acknowledgment](tdd/README.md) |
-| How expensive are validation and serialization inside Go? | [Five samples per benchmark](performance/README.md) |
-| Is the API contract usable? | [Live OpenAPI contract](api-contract.md), [API examples](../docs/api-examples.md), [real external capture](webhook-site.md) |
-| Can I trace a message? | [OTLP trace from the API through the worker to HTTP](trace.md), [operational queries](../docs/tracing.md) |
-| Can I reproduce the checks? | [Local and GitHub CI](ci/README.md), [full verification commands](../docs/verification.md), [tested container inventory](infra/README.md) |
+## Standalone channel isolation
 
-## Reading the measurements
+Each run submitted 30 standalone emails at normal priority in three conditions. The backlog case admitted 1,500 standalone SMS requests first. The cooldown case held 180 SMS in the shared channel limiter for 12 seconds. One worker with 24 slots served all channels. Each column lists two fresh local Compose runs. [Measurements and image IDs](standalone-isolation.json)
 
-The three result directories correspond to successive runs. `bench/` holds the initial measurements. `bench/final/` is the matched baseline after API and retry correctness fixes, before tuning Kafka fetch windows. `bench/tuned/` contains measurements with the weighted fetch windows. Each includes its own environment and raw JSON files. Percentiles reported in the summary use the population for that run. Single-batch create timing represents one observation.
+| Measurement | Shared standalone topic `4ca75cc` | Per-channel standalone topics `24e727d` |
+| --- | --- | --- |
+| Email p95 on an idle system | 473 / 548 ms | 434 / 519 ms |
+| Email p95 behind the SMS burst | 17.27 / 17.31 s | 562 / 460 ms |
+| SMS completions/s across that burst | 81.74 / 81.50 | 77.14 / 77.03 |
+| Email p95 with SMS paused | 14.00 / 13.77 s | 442 / 484 ms |
+| Emails accepted before the first paused SMS was claimed | 0 of 30 in both runs | 30 of 30 in both runs |
 
-In the tuned 10,000-SMS burst, the service accepted all ten 1,000-item requests, reached provider acceptance for every item, and the provider counted exactly one POST for **each** of the 10,000 IDs. The receipt audit ran after the timed interval. The provider observed at most 94 SMS requests in a rolling second. This demonstrates the behavior in this run with a synthetic 20 ms provider and persistent single-host infrastructure.
+The first email entered with 1,451 to 1,457 SMS outstanding. Across all four runs, each of 7,080 API IDs had one provider POST and one persisted acceptance. The observed peak was 87 POSTs for one channel in a rolling second. SMS burst throughput fell by 5.6% and 5.5% in the two comparisons.
 
-One controlled failure run produced 10 accepted, 10 failed and 10 unknown statuses. The fixture actually accepted the ambiguous ten before dropping its responses. Their unresolved status is intentional and observable.
+```sh
+python3 -B scripts/single-channel-isolation.py --revision 4ca75cc --out .local/results/single-baseline.json
+python3 -B scripts/single-channel-isolation.py --revision 24e727d --out .local/results/single-candidate.json
+```
+
+## Other experiments
+
+| Question | Recorded observation | Reproduce |
+| --- | --- | --- |
+| Can a cancellation race cause a send? | When cancellation won the conditional database update, the provider received zero POSTs. A separate hard-stop test found six unresolved IDs that reached the provider before the worker died. [Per-ID audit](https://github.com/EfeDurmaz16/notification-system/blob/4ca75cc/reports/channel-cutover/rebalance/README.md) | `make ci`, `make rebalance` |
+| What happens when all three channels stay busy? | A 15-minute run on v1.1.0 sent 36,000 notifications per channel, including deliberate rejections and lost acknowledgements. All 108,000 IDs had one provider POST each. [Versioned release report](https://github.com/EfeDurmaz16/notification-system/releases/download/v1.1.0/notification-system-verification-report.md) | `make sustained-mixed` |
+| Can one standalone request pass a campaign? | During a 10,000-SMS campaign, a standalone probe took 100.46 ms and a same-priority one-item batch took 108.312 s. They were created 7.19 ms apart. [Probe timestamps and workload](https://github.com/EfeDurmaz16/notification-system/blob/4ca75cc/reports/ingress-share/README.md) | `python3 scripts/ingress-share.py --help` for workload options |
+| Where did batch push wait during an SMS campaign? | Per-channel batch readers reduced push p95 from 42.98 s to 187 ms and 45.74 s to 246 ms. SMS throughput during the probes fell by 5.65% and 6.26%. [Matched trials and selection rule](../docs/decision-history.md#a-push-batch-waiting-behind-an-sms-campaign) | See the [routing guide](../docs/channel-batch-routing.md) for the experiment and migration checks. |
+
+## Historical evidence
+
+The [offline archive](historical-evidence.tar.gz) contains the complete 145-file evidence directory as it stood at commit `4ca75cc`. It includes raw JSON, per-ID CSVs, TDD transcripts, the original index and workload notes. Each run retains its recorded environment. The snapshot commit identifies where the evidence was packaged. Individual runs identify the implementation tested. [Browse the same files on GitHub](https://github.com/EfeDurmaz16/notification-system/tree/4ca75cc/reports)
+
+To inspect one result locally without extracting the whole archive:
+
+```sh
+tar -xOzf reports/historical-evidence.tar.gz reports/bench/tuned/summary.md
+```

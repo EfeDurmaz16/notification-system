@@ -69,6 +69,9 @@ def main():
     state = capture("GET", path, notifications + "/{id}", 200)
     if state["status"] != "cancelled":
         raise SystemExit("cancelled notification not visible")
+    history = capture("GET", path + "/history", notifications + "/{id}/history", 200)
+    if [event["status"] for event in history["items"]] != ["scheduled", "cancelled"]:
+        raise SystemExit("notification history did not preserve both transitions in order")
     batch = capture("POST", batches, batches, 202,
                     {"notifications": [item, {**item, "recipient": "invalid"}]},
                     str(uuid4()), "components/responses/Batch")

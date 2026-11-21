@@ -1,0 +1,24 @@
+# Opt in with -f docker-compose.yml -f deploy/retention.compose.yml.
+services:
+  retention:
+    image: postgres:17-alpine
+    depends_on:
+      api: {condition: service_healthy}
+    restart: on-failure
+    environment:
+      PGHOST: postgres
+      PGDATABASE: notify
+      PGUSER: notify
+      PGPASSWORD: notify
+      PGAPPNAME: notification-retention
+      RETAIN_DAYS: ${RETAIN_DAYS:?Set a positive number of days to retain}
+      RETENTION_APPLY: ${RETENTION_APPLY:-false}
+    volumes:
+      - ./scripts/retention.sql:/retention.sql:ro
+    entrypoint: [/bin/sh, -ec]
+    command:
+      - |
+        while :; do
+          psql -X -v keep_days="$$RETAIN_DAYS" -v apply="$$RETENTION_APPLY" -f /retention.sql
+          sleep 60
+        done

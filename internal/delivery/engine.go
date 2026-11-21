@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"net/http/httptrace"
 	"strconv"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -49,7 +50,8 @@ type Outcome struct {
 }
 
 // Start compares the pending state and expected attempt before setting sending.
-// Finish must update only the matching sending generation.
+// Finish records the matching generation. A confirmed receipt can repair
+// that same generation after its send lease expired.
 type Store interface {
 	Start(context.Context, string, int) (bool, error)
 	Finish(context.Context, string, int, Outcome) error
@@ -64,7 +66,10 @@ type Engine struct {
 	// Idempotent requires an explicit guarantee from the external provider.
 	Idempotent bool
 	// ThrottleRejects requires a provider contract guaranteeing a 429 has no side effect.
-	ThrottleRejects   bool
+	ThrottleRejects bool
+	// MessageIDReceipt is for destinations that define a JSON messageId in a
+	// successful response as proof of acceptance. The assessment uses a full 202 receipt.
+	MessageIDReceipt  bool
 	IdempotencyWindow time.Duration
 	MaxAttempts       int
 	BaseBackoff       time.Duration
@@ -114,7 +119,7 @@ func (e *Engine) Send(ctx context.Context, j Job) error {
 	until := e.keyDeadline(j, now)
 	out := result{state: unknown, reason: "idempotency_window_expired"}
 	if !e.Idempotent || now.Add(client.Timeout).Before(until) {
-		out = dispatch(&client, request)
+		out = e.dispatch(&client, request)
 		if e.ObserveEndpoint != nil {
 			observeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Second)
 			err := e.ObserveEndpoint(observeCtx, j.Channel, out.httpStatus, out.reason)
@@ -235,7 +240,7 @@ type result struct {
 	retryAfter               time.Duration
 }
 
-func dispatch(client *http.Client, req *http.Request) result {
+func (e *Engine) dispatch(client *http.Client, req *http.Request) result {
 	req, end := observability.ProviderRequest(req)
 	defer end()
 	if req.Context().Err() != nil {
@@ -259,31 +264,64 @@ func dispatch(client *http.Client, req *http.Request) result {
 		return result{state: unknown, reason: "transport_outcome_unknown"}
 	}
 	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode != http.StatusAccepted {
-		switch resp.StatusCode {
-		case http.StatusUnauthorized:
-			return result{state: failed, reason: "provider_unauthorized", httpStatus: resp.StatusCode}
-		case http.StatusForbidden:
-			return result{state: failed, reason: "provider_forbidden", httpStatus: resp.StatusCode}
-		case http.StatusBadRequest, http.StatusNotFound,
-			http.StatusMethodNotAllowed, http.StatusRequestEntityTooLarge, http.StatusUnsupportedMediaType, http.StatusUnprocessableEntity:
-			return result{state: failed, reason: "provider_rejected", httpStatus: resp.StatusCode}
-		case http.StatusTooManyRequests, http.StatusServiceUnavailable:
-			return result{state: unknown, reason: "provider_outcome_unknown", httpStatus: resp.StatusCode,
-				retryAfter: retryAfter(resp.Header.Get("Retry-After"), time.Now())}
-		default:
-			return result{state: unknown, reason: "provider_outcome_unknown", httpStatus: resp.StatusCode}
-		}
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		return readReceipt(resp, e.MessageIDReceipt)
 	}
+	// Webhook.site permits a capture URL to return a configured error status.
+	// The same status can also signal an expired token or denied endpoint access.
+	if strings.EqualFold(req.URL.Hostname(), "webhook.site") && (resp.StatusCode == http.StatusForbidden || resp.StatusCode == http.StatusNotFound) {
+		return result{state: unknown, reason: "provider_endpoint_access", httpStatus: resp.StatusCode}
+	}
+	switch resp.StatusCode {
+	case http.StatusUnauthorized:
+		return result{state: failed, reason: "provider_unauthorized", httpStatus: resp.StatusCode}
+	case http.StatusForbidden:
+		return result{state: failed, reason: "provider_forbidden", httpStatus: resp.StatusCode}
+	case http.StatusBadRequest, http.StatusNotFound,
+		http.StatusMethodNotAllowed, http.StatusRequestEntityTooLarge, http.StatusUnsupportedMediaType, http.StatusUnprocessableEntity:
+		return result{state: failed, reason: "provider_rejected", httpStatus: resp.StatusCode}
+	case http.StatusTooManyRequests, http.StatusServiceUnavailable:
+		return result{state: unknown, reason: "provider_outcome_unknown", httpStatus: resp.StatusCode,
+			retryAfter: retryAfter(resp.Header.Get("Retry-After"), time.Now())}
+	default:
+		return result{state: unknown, reason: "provider_outcome_unknown", httpStatus: resp.StatusCode}
+	}
+}
+
+func readReceipt(resp *http.Response, messageIDReceipt bool) result {
 	const maxBody = 16 << 10
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxBody+1))
-	var ack struct {
-		MessageID string    `json:"messageId"`
-		Status    string    `json:"status"`
-		Timestamp time.Time `json:"timestamp"`
+	invalid := result{state: unknown, reason: "malformed_ack", httpStatus: resp.StatusCode}
+	if err != nil || len(body) > maxBody {
+		return invalid
 	}
-	if err != nil || len(body) > maxBody || json.Unmarshal(body, &ack) != nil || ack.MessageID == "" || ack.Status != "accepted" || ack.Timestamp.IsZero() {
-		return result{state: unknown, reason: "malformed_ack", httpStatus: resp.StatusCode}
+	if len(bytes.TrimSpace(body)) == 0 {
+		invalid.reason = "missing_ack"
+		return invalid
+	}
+	if !messageIDReceipt && resp.StatusCode != http.StatusAccepted {
+		invalid.reason = "unexpected_ack_status"
+		return invalid
+	}
+	var ack struct {
+		MessageID string          `json:"messageId"`
+		Status    json.RawMessage `json:"status"`
+		Timestamp json.RawMessage `json:"timestamp"`
+	}
+	if json.Unmarshal(body, &ack) != nil || strings.TrimSpace(ack.MessageID) == "" || strings.ContainsRune(ack.MessageID, 0) {
+		return invalid
+	}
+	if !messageIDReceipt || ack.Status != nil {
+		var status string
+		if json.Unmarshal(ack.Status, &status) != nil || status != accepted {
+			return invalid
+		}
+	}
+	if !messageIDReceipt {
+		var timestamp time.Time
+		if json.Unmarshal(ack.Timestamp, &timestamp) != nil || timestamp.IsZero() {
+			return invalid
+		}
 	}
 	return result{state: accepted, messageID: ack.MessageID, reason: "provider_accepted", httpStatus: resp.StatusCode}
 }

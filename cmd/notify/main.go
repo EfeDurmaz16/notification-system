@@ -59,23 +59,25 @@ func run(ctx context.Context, args []string) error {
 	if dsn == "" {
 		return errors.New("DATABASE_URL must be set")
 	}
-	// Roll out dual-read workers before enabling channel-routed producers.
-	batchRouting := env("BATCH_ROUTING", "shared")
-	switch batchRouting {
-	case "shared", "dual-read", "channel":
-	default:
-		return errors.New("BATCH_ROUTING must be shared, dual-read or channel")
+	modeName := env("BATCH_ROUTING", "shared")
+	writes, reads, err := routing(modeName)
+	if err != nil {
+		return err
 	}
-	slog.Info("routing configured", "mode", mode, "batch_routing", batchRouting)
+	slog.Info("routing configured", "mode", mode, "batch_routing", modeName)
 	connect, cancel := context.WithTimeout(ctx, 30*time.Second)
-	db, err := store.Open(connect, dsn, batchRouting == "channel")
+	db, err := store.Open(connect, dsn, writes)
 	cancel()
 	if err != nil {
 		return fmt.Errorf("open database: %w", err)
 	}
 	defer func() { _ = db.Close() }()
 	if mode == "api" {
-		return serve(ctx, env("HTTP_ADDR", ":8080"), observability.HTTP(api.New(db)))
+		limit, err := strconv.Atoi(env("WS_MAX_SUBSCRIPTIONS", strconv.Itoa(api.DefaultSubscriptionLimit)))
+		if err != nil || limit < 1 || limit > 1024 {
+			return errors.New("WS_MAX_SUBSCRIPTIONS must be between 1 and 1024")
+		}
+		return serve(ctx, env("HTTP_ADDR", ":8080"), observability.HTTP(api.NewWithSubscriptionLimit(db, limit)))
 	}
 	workers, err := strconv.Atoi(env("WORKER_CONCURRENCY", "32"))
 	if err != nil || workers < 1 || workers > 512 {
@@ -86,7 +88,7 @@ func run(ctx context.Context, args []string) error {
 		return errors.New("BATCH_SHARE_PERCENT must be between 1 and 49")
 	}
 	brokers := strings.Split(env("KAFKA_BROKERS", "localhost:19092"), ",")
-	cfg := stream.Config{ChannelReaders: batchRouting != "shared", Brokers: brokers, Group: env("KAFKA_GROUP", "notification-delivery"),
+	cfg := stream.Config{ChannelReaders: reads, Brokers: brokers, Group: env("KAFKA_GROUP", "notification-delivery"),
 		RedisAddr: env("REDIS_ADDR", "localhost:16379"), Workers: workers, BatchSharePercent: batchShare}
 	engine, err := providerEngine(db)
 	if err != nil {
@@ -97,6 +99,9 @@ func run(ctx context.Context, args []string) error {
 		recoveryWindow = engine.IdempotencyWindow
 	}
 	group, workCtx := errgroup.WithContext(ctx)
+	group.Go(func() error {
+		return serveWorkerHealth(workCtx, env("WORKER_HEALTH_ADDR", "127.0.0.1:8082"), db.Ping, cfg)
+	})
 	group.Go(func() error { return stream.Run(workCtx, cfg, db, engine) })
 	group.Go(func() error {
 		tick := time.NewTicker(250 * time.Millisecond)
@@ -113,6 +118,26 @@ func run(ctx context.Context, args []string) error {
 		}
 	})
 	return group.Wait()
+}
+
+// Legacy modes keep their published topics and consumer group offsets.
+// During rollout a reader can drain both formats before writers switch.
+func routing(mode string) (writes, reads store.ChannelRoutes, err error) {
+	switch mode {
+	case "shared":
+	case "dual-read":
+		reads.Batch = true
+	case "channel":
+		writes.Batch, reads.Batch = true, true
+	case "read-isolated":
+		writes.Batch, reads.Batch, reads.Single = true, true, true
+	case "isolated":
+		writes = store.ChannelRoutes{Batch: true, Single: true}
+		reads = writes
+	default:
+		err = fmt.Errorf("unknown BATCH_ROUTING %q: expected shared, dual-read, channel, read-isolated or isolated", mode)
+	}
+	return writes, reads, err
 }
 
 func providerEngine(db delivery.Store) (*delivery.Engine, error) {
@@ -144,9 +169,14 @@ func providerEngine(db delivery.Store) (*delivery.Engine, error) {
 	if err != nil {
 		return nil, errors.New("invalid PROVIDER_429_NOT_ACCEPTED")
 	}
+	mode := env("PROVIDER_ACK_MODE", "assessment")
+	if mode != "assessment" && mode != "message_id" {
+		return nil, errors.New("PROVIDER_ACK_MODE must be assessment or message_id")
+	}
 	return &delivery.Engine{
 		Store: db, URL: endpoint, Idempotent: idempotent, IdempotencyWindow: window,
 		MaxAttempts: attempts, BaseBackoff: base, ThrottleRejects: throttleRejects,
+		MessageIDReceipt: mode == "message_id",
 	}, nil
 }
 

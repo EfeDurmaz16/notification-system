@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"os"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -49,7 +50,7 @@ func testDSN(t *testing.T) string {
 
 func testStore(t *testing.T) *Store {
 	t.Helper()
-	s, err := Open(context.Background(), testDSN(t), false)
+	s, err := Open(context.Background(), testDSN(t), ChannelRoutes{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -244,7 +245,7 @@ func TestLegacyScheduledNotificationUsesBatchTopic(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	s, err := Open(ctx, dsn, false)
+	s, err := Open(ctx, dsn, ChannelRoutes{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -414,7 +415,7 @@ func TestAtomicRollbackOnStoreFailure(t *testing.T) {
 
 func TestBatchChannelRoutesOnCreateAndPromotion(t *testing.T) {
 	s := testStore(t)
-	s.channelBatch = true
+	s.routes.Batch = true
 	ctx := t.Context()
 	entries := []Item{sms(), sms(), sms()}
 	entries[1].Channel, entries[2].Channel = "email", "push"
@@ -455,11 +456,59 @@ func TestBatchChannelRoutesOnCreateAndPromotion(t *testing.T) {
 	if err := s.Finish(ctx, id, 1, delivery.Outcome{State: "retry_wait", Reason: "dial_failed", NextAttemptAt: time.Now().Add(-time.Second)}); err != nil {
 		t.Fatal(err)
 	}
-	s.channelBatch = false
+	s.routes.Batch = false
 	if err := s.Tick(ctx, time.Minute); err != nil {
 		t.Fatal(err)
 	}
 	if countEvents(id, "notifications.high.batch.sms") != 1 || countEvents(id, "notifications.high") != 1 {
 		t.Fatal("retry did not preserve the old event and publish on the active route")
+	}
+}
+
+func TestStandaloneChannelRoutesPreserveLegacyAndCurrentGenerations(t *testing.T) {
+	s := testStore(t)
+	ctx := t.Context()
+	topics := func(id string) []string {
+		t.Helper()
+		rows, err := s.db.Query("SELECT aggregatetype FROM outbox WHERE aggregateid=$1 ORDER BY (payload->>'attempt')::int", id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = rows.Close() }()
+		var topics []string
+		for rows.Next() {
+			var topic string
+			if err := rows.Scan(&topic); err != nil {
+				t.Fatal(err)
+			}
+			topics = append(topics, topic)
+		}
+		if err := rows.Err(); err != nil {
+			t.Fatal(err)
+		}
+		return topics
+	}
+
+	id := createOne(t, s, sms())
+	if started, err := s.Start(ctx, id, 1); err != nil || !started {
+		t.Fatalf("start: %t %v", started, err)
+	}
+	if err := s.Finish(ctx, id, 1, delivery.Outcome{State: "retry_wait", Reason: "dial_failed", NextAttemptAt: time.Now().Add(-time.Second)}); err != nil {
+		t.Fatal(err)
+	}
+	s.routes = ChannelRoutes{Batch: true, Single: true}
+	if err := s.Tick(ctx, time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	if got := topics(id); !slices.Equal(got, []string{"notifications.high.single", "notifications.high.single.sms"}) {
+		t.Fatalf("retry changed legacy record or used stale route: %v", got)
+	}
+	for _, channel := range []string{"push", "email", "sms"} {
+		item := sms()
+		item.Channel = channel
+		want := "notifications.high.single." + channel
+		if got := topics(createOne(t, s, item)); !slices.Equal(got, []string{want}) {
+			t.Fatalf("standalone create: got %v, want %s", got, want)
+		}
 	}
 }

@@ -9,7 +9,7 @@ x-app: &app
     REDIS_ADDR: redis:6379
     LOG_LEVEL: ${LOG_LEVEL:-INFO}
     KAFKA_GROUP: delivery
-    BATCH_ROUTING: ${BATCH_ROUTING:-channel}
+    BATCH_ROUTING: ${BATCH_ROUTING:-isolated}
     PROVIDER_URL: ${PROVIDER_URL:-http://provider:8081/send}
     PROVIDER_IDEMPOTENT: ${PROVIDER_IDEMPOTENT:-false}
     PROVIDER_KEY_WINDOW: ${PROVIDER_KEY_WINDOW:-24h}
@@ -76,6 +76,7 @@ services:
         for tier in high normal low; do
           for channel in sms email push; do
             /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic notifications.$$tier.batch.$$channel --partitions 1 --replication-factor 1
+            /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic notifications.$$tier.single.$$channel --partitions 3 --replication-factor 1
           done
         done
         /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic notifications.invalid --partitions 1 --replication-factor 1
@@ -137,6 +138,7 @@ services:
     environment:
       <<: *app-env
       HTTP_ADDR: ":8080"
+      WS_MAX_SUBSCRIPTIONS: ${WS_MAX_SUBSCRIPTIONS:-32}
     healthcheck:
       test: [CMD, wget, -q, -O, /dev/null, http://127.0.0.1:8080/healthz]
       interval: 4s
@@ -154,6 +156,7 @@ services:
     environment:
       <<: *app-env
       PROVIDER_429_NOT_ACCEPTED: ${PROVIDER_429_NOT_ACCEPTED:-}
+      PROVIDER_ACK_MODE: ${PROVIDER_ACK_MODE:-assessment}
       RETRY_MAX_ATTEMPTS: ${RETRY_MAX_ATTEMPTS:-6}
       RETRY_BASE_BACKOFF: ${RETRY_BASE_BACKOFF:-2s}
       WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-24}

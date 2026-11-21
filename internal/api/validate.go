@@ -1,7 +1,7 @@
 package api
 
 import (
-	"encoding/json"
+	"bytes"
 	"errors"
 	"net/mail"
 	"regexp"
@@ -27,19 +27,16 @@ type templateVariables map[string]string
 
 // encoding/json otherwise coerces a null map value to the empty string.
 func (v *templateVariables) UnmarshalJSON(data []byte) error {
-	var input map[string]*string
-	if err := json.Unmarshal(data, &input); err != nil {
-		return err
-	}
-	if input == nil {
+	data = bytes.TrimSpace(data)
+	if data[0] != '{' {
 		return errors.New("variables must be an object")
 	}
-	values := make(templateVariables, len(input))
-	for name, value := range input {
-		if value == nil {
+	values := make(templateVariables, memberCount(data))
+	for key, value := range jsonMembers(data) {
+		if value[0] != '"' {
 			return errors.New("template variable must be a string")
 		}
-		values[name] = *value
+		values[jsonString(key)] = jsonString(value)
 	}
 	*v = values
 	return nil

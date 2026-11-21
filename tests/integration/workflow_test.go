@@ -170,6 +170,26 @@ func TestWorkflow(t *testing.T) {
 			}
 		})
 	}
+	for _, tc := range []struct {
+		channel, recipient, content, reason string
+		code                                int
+	}{
+		{"sms", "+12025550114", "[mock:gateway-after-accept]", "provider_outcome_unknown", 503},
+		{"push", "device-smoke", "[mock:empty-ack]", "missing_ack", 200},
+		{"email", "smoke@example.invalid", "[mock:malformed-ack]", "malformed_ack", 202},
+	} {
+		t.Run(tc.reason, func(t *testing.T) {
+			body := fmt.Sprintf(`{"recipient":%q,"channel":%q,"priority":"normal","content":%q}`, tc.recipient, tc.channel, tc.content)
+			var item createResult
+			call(t, client, "POST", api+"/v1/notifications", key+"-"+tc.reason, body, 202, &item)
+			out := awaitStatus(t, client, api+"/v1/notifications/"+item.ID, "unknown")
+			var stats struct{ Attempts int }
+			call(t, client, "GET", provider+"/stats/"+item.ID, "", "", 200, &stats)
+			if out.LastReason != tc.reason || out.ProviderHTTPStatus == nil || *out.ProviderHTTPStatus != tc.code || stats.Attempts != 1 {
+				t.Fatalf("API outcome %+v, provider attempts %d", out, stats.Attempts)
+			}
+		})
+	}
 }
 
 func awaitStatus(t *testing.T, client *http.Client, url, want string) notification {

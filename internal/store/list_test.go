@@ -66,3 +66,33 @@ func TestListFiltersAndPagination(t *testing.T) {
 		t.Fatalf("cursor between timestamps: got %+v, %v; want only %s", rows, err, oldest)
 	}
 }
+
+func TestListBatchFilterAndPageSizeBounds(t *testing.T) {
+	s := testStore(t)
+	ctx := t.Context()
+	items := make([]Item, 51)
+	for i := range items {
+		items[i] = sms()
+	}
+	batch, err := s.Create(ctx, uuid(), []byte("batch"), BatchIngress, items)
+	if err != nil {
+		t.Fatal(err)
+	}
+	createOne(t, s, sms()) // A newer, otherwise matching notification in another batch.
+	for _, tc := range []struct{ limit, want int }{{0, 50}, {1000, 51}} {
+		notifications, err := s.List(ctx, Filter{BatchID: batch.BatchID, Channel: "sms", Limit: tc.limit})
+		if err != nil || len(notifications) != tc.want {
+			t.Fatalf("limit=%d: length=%d, want=%d, err=%v", tc.limit, len(notifications), tc.want, err)
+		}
+		for _, n := range notifications {
+			if n.BatchID != batch.BatchID {
+				t.Fatalf("foreign batch %s on page for %s", n.BatchID, batch.BatchID)
+			}
+		}
+	}
+	for _, filter := range []Filter{{Limit: -1}, {Limit: 1001}, {Offset: -1}} {
+		if _, err := s.List(ctx, filter); err == nil {
+			t.Errorf("invalid pagination accepted: %+v", filter)
+		}
+	}
+}

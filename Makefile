@@ -13,7 +13,7 @@ TEST_DATABASE_URL ?= postgres://notify:notify@127.0.0.1:$(or $(POSTGRES_PORT),54
 RESULTS ?= .local/results
 LOAD_FLAGS ?=
 
-.PHONY: help fmt lint vuln test race build check up down smoke integration ci performance burst load stress mixed failures package openapi contract matrix recovery crash rebalance quarantine drain wave channel-isolation sustained-mixed verify-all
+.PHONY: help fmt lint vuln test race build check up down smoke integration ci performance burst load stress mixed failures package openapi contract matrix recovery crash rebalance quarantine drain wave channel-isolation sustained-mixed receipt-recovery verify-all
 
 help:
 	@printf '%s\n' 'make check        Format check, vet, golangci-lint, unit tests, race detector, binaries' \
@@ -27,6 +27,7 @@ help:
 		'make burst/load/stress/mixed/failures  Run one experiment on the local stack' \
 		'make rebalance    Kill one of three workers under load and audit every ID' \
 		'make drain        Stop a worker during a provider call and audit the replacement' \
+		'make receipt-recovery  Recover a provider receipt after database and worker interruptions' \
 		'make quarantine   Verify a malformed Kafka record and subsequent delivery' \
 		'make wave         Compare fixed, scheduled and feedback scaling on a traffic wave' \
 		'make channel-isolation  Compare push latency under an SMS backlog on two worker builds' \
@@ -78,12 +79,12 @@ contract:
 integration:
 	PROVIDER_URL=http://provider:8081/send PROVIDER_IDEMPOTENT=false $(COMPOSE) up --build -d --wait --wait-timeout 300
 	python3 -B scripts/check-routing.py
-	TEST_DATABASE_URL="$(TEST_DATABASE_URL)" $(GO) test -race -count=1 -v ./internal/store
-	TEST_KAFKA_BROKER="$(TEST_KAFKA_BROKER)" TEST_REDIS_ADDR="$(TEST_REDIS_ADDR)" $(GO) test -race -count=1 -v ./internal/stream
+	TEST_DATABASE_URL="$(TEST_DATABASE_URL)" $(GO) test -race -cover -count=1 -v ./internal/store
+	TEST_KAFKA_BROKER="$(TEST_KAFKA_BROKER)" TEST_REDIS_ADDR="$(TEST_REDIS_ADDR)" $(GO) test -race -cover -count=1 -v ./internal/stream
 	$(MAKE) smoke contract
 	python3 scripts/check-outcome-report.py
 
-ci: check vuln openapi integration quarantine drain
+ci: check vuln openapi integration quarantine drain receipt-recovery
 
 performance:
 	mkdir -p "$(RESULTS)"
@@ -105,6 +106,9 @@ crash:
 
 rebalance:
 	python3 -B scripts/worker-rebalance.py --out-dir "$(RESULTS)/worker-rebalance"
+
+receipt-recovery:
+	python3 -B scripts/receipt-recovery.py --report "$(RESULTS)/receipt-recovery.json"
 
 quarantine:
 	python3 -B scripts/quarantine.py --report "$(RESULTS)/quarantine.json"

@@ -51,13 +51,21 @@ def free_ports(count):
 
 def batch_source(priority="normal", channel="sms"):
     """Return the expected writer topic and partition count for local experiments."""
-    if (os.getenv("BATCH_ROUTING") or "channel") == "channel":
+    if (os.getenv("BATCH_ROUTING") or "isolated") in {"channel", "read-isolated", "isolated"}:
         return f"notifications.{priority}.batch.{channel}", 1
     return f"notifications.{priority}", 3
 
 
+def single_source(priority="normal", channel="sms"):
+    topic = f"notifications.{priority}.single"
+    if (os.getenv("BATCH_ROUTING") or "isolated") == "isolated":
+        topic += "." + channel
+    return topic, 3
+
+
 class Experiment:
-    def __init__(self):
+    def __init__(self, root=ROOT):
+        self.root = root
         self.project = "notify-recovery-" + uuid.uuid4().hex[:10]
         names = ["API_PORT", "PROVIDER_PORT", "CONNECT_PORT", "POSTGRES_PORT", "REDIS_PORT", "KAFKA_PORT"]
         ports = dict(zip(names, map(str, free_ports(len(names)))))
@@ -69,8 +77,8 @@ class Experiment:
         self.records = []
 
     def compose(self, *args, capture=False, check=True):
-        return subprocess.run(["docker", "compose", "-f", str(ROOT / "docker-compose.yml"),
-                               "-p", self.project, *args], cwd=ROOT, env=self.env, check=check,
+        return subprocess.run(["docker", "compose", "-f", str(self.root / "docker-compose.yml"),
+                               "-p", self.project, *args], cwd=self.root, env=self.env, check=check,
                               capture_output=capture, text=True, timeout=600)
 
     def request(self, method, url, body=None, expected=200, headers=None):
@@ -240,7 +248,7 @@ def main():
     parser.add_argument("--build", action="store_true", help="build the local app image before startup")
     args = parser.parse_args()
     if args.report is None:
-        args.report = ROOT / "reports" / ("recovery-crash.json" if args.crash else "recovery.json")
+        args.report = ROOT / ".local" / "results" / ("recovery-crash.json" if args.crash else "recovery.json")
     exp = Experiment()
     report = {"startedAt": datetime.datetime.now(datetime.timezone.utc).isoformat(), "cases": exp.records,
               "environment": "isolated local Docker Compose project, synthetic provider, 2 worker replicas"}

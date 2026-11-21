@@ -84,7 +84,9 @@ func (s *Store) finishOnce(ctx context.Context, id string, attempt int, out deli
 	args := []any{id, attempt, out.State, out.MessageID, deadline, out.Reason, out.HTTPStatus}
 	r, err := s.db.ExecContext(ctx, `UPDATE notifications SET status=$3,message_id=$4,next_attempt_at=$5,
         last_reason=$6,provider_http_status=NULLIF($7::integer,0),updated_at=clock_timestamp()
-        WHERE id=$1 AND attempt=$2 AND status='sending'`, args...)
+        WHERE id=$1 AND attempt=$2 AND (status='sending' OR
+            (status IN ('unknown','retry_wait') AND last_reason='send_lease_expired'
+             AND $3='accepted' AND $4<>'' AND $6='provider_accepted' AND $7::integer BETWEEN 200 AND 299))`, args...)
 	if err != nil {
 		return err
 	}
@@ -158,8 +160,8 @@ func (s *Store) TickWithRecovery(ctx context.Context, staleAfter, idempotencyWin
     ),added AS (
         UPDATE notifications n SET status='pending',updated_at=clock_timestamp(),next_attempt_at=NULL,
             attempt=n.attempt+CASE WHEN n.status='retry_wait' THEN 1 ELSE 0 END
-        FROM due WHERE n.id=due.id RETURNING n.id,n.priority,n.ingress,n.status,n.attempt,n.traceparent,n.channel,$1::boolean AS channel_batch
-    ) `+emitReady, s.channelBatch)
+        FROM due WHERE n.id=due.id RETURNING n.id,n.priority,n.ingress,n.status,n.attempt,n.traceparent,n.channel,$1::boolean AS channel_batch,$2::boolean AS channel_single
+    ) `+emitReady, s.routes.Batch, s.routes.Single)
 	if err != nil {
 		return err
 	}

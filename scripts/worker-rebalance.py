@@ -13,11 +13,12 @@ import time
 import urllib.error
 import uuid
 
-from recovery import Experiment, ROOT, batch_source, require, wait_until
+from recovery import Experiment, ROOT, batch_source, single_source, require, wait_until
 
 COUNT = 400
 BATCH_TOPIC, BATCH_PARTITIONS = batch_source()
-PARTITIONS = {BATCH_TOPIC: BATCH_PARTITIONS, "notifications.normal.single": 3}
+SINGLE_TOPIC, SINGLE_PARTITIONS = single_source()
+PARTITIONS = {BATCH_TOPIC: BATCH_PARTITIONS, SINGLE_TOPIC: SINGLE_PARTITIONS}
 GROUPS = [topic.replace("notifications.", "delivery.", 1) for topic in PARTITIONS]
 GROUP_ARGS = [arg for group in GROUPS for arg in ("--group", group)]
 

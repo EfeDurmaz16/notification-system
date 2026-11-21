@@ -46,7 +46,7 @@ func TestMetricRollupTracksTransactionsAndLatencyBounds(t *testing.T) {
 func TestRetentionRequiresPublicationEvidenceAndPreservesUnresolved(t *testing.T) {
 	dsn := testDSN(t)
 	ctx := t.Context()
-	s, err := Open(ctx, dsn, false)
+	s, err := Open(ctx, dsn, ChannelRoutes{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -73,9 +73,9 @@ func TestRetentionRequiresPublicationEvidenceAndPreservesUnresolved(t *testing.T
 	query.Set("options", "-csearch_path="+query.Get("search_path"))
 	query.Del("search_path")
 	connection.RawQuery = query.Encode()
-	cleanup := func(apply string) {
+	cleanup := func(apply, cutoff string) {
 		t.Helper()
-		cmd := exec.CommandContext(ctx, "psql", connection.String(), "-Xq", "-v", "before=yesterday", "-v", "apply="+apply, "-v", "published_ids="+published+","+unresolved+","+pending, "-f", "../../scripts/retention.sql")
+		cmd := exec.CommandContext(ctx, "psql", connection.String(), "-Xq", "-v", cutoff, "-v", "apply="+apply, "-v", "published_ids="+published+","+unresolved+","+pending, "-f", "../../scripts/retention.sql")
 		if out, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("psql: %s: %v", out, err)
 		}
@@ -89,10 +89,17 @@ func TestRetentionRequiresPublicationEvidenceAndPreservesUnresolved(t *testing.T
 			t.Fatalf("out=%d events=%d keep=%d notifications=%d batches=%d err=%v", out, events, keep, notifications, batches, err)
 		}
 	}
-	cleanup("false")
+	for _, cutoff := range []string{"keep_days=0", "keep_days=-1", "keep_days=nonsense"} {
+		cmd := exec.CommandContext(ctx, "psql", connection.String(), "-Xq", "-v", cutoff, "-v", "apply=true", "-f", "../../scripts/retention.sql")
+		if out, err := cmd.CombinedOutput(); err == nil {
+			t.Fatalf("unsafe retention horizon %s accepted: %s", cutoff, out)
+		}
+	}
 	check(4, 7)
-	cleanup("true")
+	cleanup("false", "keep_days=1")
+	check(4, 7)
+	cleanup("true", "before=yesterday")
 	check(3, 3)
-	cleanup("true")
+	cleanup("true", "keep_days=1")
 	check(3, 3)
 }

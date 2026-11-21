@@ -9,6 +9,15 @@
 \else
 \set published_ids ''
 \endif
+\if :{?keep_days}
+\if :{?before}
+DO $$ BEGIN RAISE EXCEPTION 'Supply either keep_days or before'; END $$;
+\endif
+-- make_interval validates the integer and leaves calendar arithmetic to PostgreSQL.
+SELECT CASE WHEN :'keep_days'::int >= 1
+            THEN now() - make_interval(days => :'keep_days'::int)
+            ELSE 'infinity'::timestamptz END AS before \gset
+\endif
 BEGIN;
 SET LOCAL lock_timeout = '2s';
 SET LOCAL statement_timeout = '15s';

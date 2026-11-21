@@ -37,3 +37,17 @@ It builds the service in a fresh Compose project with isolated data and ports. I
    ```
 
 Webhook.site provides a capture endpoint. Its configured reply does not document provider-side idempotency or recipient delivery. The [request history API](https://docs.webhook.site/api/requests.html) is useful when investigating an unresolved attempt.
+
+## Other provider contracts
+
+Keep `PROVIDER_ACK_MODE=assessment` for this exercise. Set `PROVIDER_ACK_MODE=message_id` for a provider whose contract explicitly defines a nonempty JSON `messageId` on a 2xx response as proof of acceptance. Both modes issue the same POST. The mode controls how the worker reads the response.
+
+| Response | `assessment` | `message_id` |
+|---|---|---|
+| 202, complete accepted receipt with a valid timestamp | Accepted | Accepted |
+| 200, complete accepted receipt | Unknown | Accepted |
+| 201, `{"messageId":"m1"}` | Unknown | Accepted |
+| 202, ID, accepted status and literal timestamp `"ISO8601"` | Unknown | Accepted |
+| Any 2xx with an empty body, blank ID or explicit rejected status | Unknown | Unknown |
+
+The table assumes an ordinary provider without an idempotency guarantee. An HTTP capture with the right notification ID can support an investigation. Only the configured receipt contract can confirm acceptance. See [operator instructions](operations.md#checking-an-unknown-notification-in-webhooksite).

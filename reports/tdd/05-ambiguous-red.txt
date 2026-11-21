@@ -1,8 +1,0 @@
-=== RUN   TestRetryRejectionPreservesUnknown
-2026/11/20 22:40:29 WARN provider result trace_id="" notification_id=stable-id channel=email attempt=1 status=retry_wait reason=transport_outcome_unknown provider_http_status=0
-2026/11/20 22:40:29 WARN provider result trace_id="" notification_id=stable-id channel=email attempt=2 status=failed reason=provider_rejected provider_http_status=401
-    policy_test.go:252: after retry rejected: provider accepted=true posts=2 state=failed next=0001-01-01 00:00:00 +0000 UTC, want accepted=true posts=2 state=unknown and no retry
---- FAIL: TestRetryRejectionPreservesUnknown (0.00s)
-FAIL
-FAIL	github.com/EfeDurmaz16/notification-system/internal/delivery	0.294s
-FAIL

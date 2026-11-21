@@ -11,8 +11,13 @@ class RoutingCheckTest(unittest.TestCase):
     def test_running_modes(self):
         for apis, workers, pending, error in [
             (["channel"], ["shared"], None, "all workers read shared"),
-            (["shared", "channel"], ["shared", "dual-read"], None, None),
-            (["channel"], ["channel"], None, None),
+            (["shared", "channel"], ["shared", "dual-read"], "f", None),
+            (["channel"], ["channel"], "f", None),
+            (["isolated"], ["channel"], None, "isolated standalone"),
+            (["read-isolated"], ["shared"], None, "all workers read shared"),
+            (["isolated"], ["channel", "read-isolated"], None, None),
+            (["isolated"], ["isolated"], None, None),
+            (["channel"], ["channel"], "t", "pending work"),
             (["shared"], ["shared"], "t", "pending work"),
             (["shared"], ["shared"], "f", None),
         ]:

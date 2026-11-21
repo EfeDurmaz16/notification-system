@@ -297,6 +297,7 @@ if __name__ == "__main__":
         raise SystemExit
     exp = Experiment()
     configure(exp, args.baseline_image)
+    exp.env["BATCH_ROUTING"] = "shared"
     try:
         exp.compose("up", "-d", "--no-build", "--wait")
         for label in ("a1", "b1", "b2", "a2"):

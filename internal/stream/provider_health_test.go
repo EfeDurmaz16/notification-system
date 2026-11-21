@@ -40,6 +40,23 @@ func TestProviderCooldownRequiresConsecutiveFailuresForOneChannel(t *testing.T) 
 	}
 }
 
+func TestAccessErrorsTripOnlyForEndpointEvidence(t *testing.T) {
+	for _, status := range []int{http.StatusForbidden, http.StatusNotFound} {
+		var health providerHealth
+		now := time.Now()
+		for range 4 {
+			if health.shouldPause("sms", status, "provider_rejected", now) {
+				t.Fatalf("per-recipient failure tripped channel: HTTP %d", status)
+			}
+		}
+		for i := range 3 {
+			if got := health.shouldPause("sms", status, "provider_endpoint_access", now); got != (i == 2) {
+				t.Fatalf("endpoint failure HTTP %d, attempt %d: pause=%v", status, i+1, got)
+			}
+		}
+	}
+}
+
 type trackedOutcomes map[string]delivery.Outcome
 
 func (s trackedOutcomes) Start(_ context.Context, id string, _ int) (bool, error) {

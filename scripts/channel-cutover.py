@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Exercise forward and reverse batch routing changes on an isolated Compose stack."""
+"""Exercise forward and reverse standalone channel routing changes on an isolated Compose stack."""
 import argparse
 from collections import Counter
 from datetime import datetime, timedelta, timezone
@@ -10,7 +10,7 @@ import uuid
 
 from recovery import Experiment, ROOT, require, wait_until
 
-BASE = "88c995ca038561e3546a1304fb38f2189c5705ca"
+BASE = "4ca75cc9c4dca3265da3888553d880be324e7059"
 SHARED = "notifications.normal"
 RECIPIENTS = {"sms": "+15550100123", "email": "fixture@example.invalid", "push": "fixture-device"}
 
@@ -28,7 +28,10 @@ def main(report_path):
 
     def replace(service, image, mode):
         select(image, mode)
-        exp.compose("up", "--no-build", "--no-deps", "-d", "--wait", "--force-recreate", service)
+        # The previous worker predates the readiness endpoint. Its ability to
+        # consume after rollback is checked with a new API notification below.
+        wait = () if service == "worker" and image == baseline else ("--wait",)
+        exp.compose("up", "--no-build", "--no-deps", "-d", *wait, "--force-recreate", service)
 
     def stage(label):
         proof["steps"].append(label)
@@ -80,8 +83,11 @@ def main(report_path):
             totals[f[1]] += end
         return found if totals == expected else None
 
-    def split(channel):
+    def batch_topic(channel):
         return SHARED + ".batch." + channel
+
+    def single_topic(channel):
+        return SHARED + ".single." + channel
 
     try:
         # Archive supplies the actual previous binary and its original migrations.
@@ -93,34 +99,35 @@ def main(report_path):
             ["docker", "image", "inspect", "-f", "{{.Id}}", image], text=True).strip()
             for name, image in (("legacy", baseline), ("candidate", candidate))}
 
-        select(baseline, "shared")
+        select(baseline, "channel")
         exp.compose("up", "--no-build", "-d", "--wait", "--scale", "worker=0")
         for channel in RECIPIENTS:
-            create("legacy-" + channel, channel, [SHARED])
-        create("cancel-before-cutover", "sms", [SHARED], cancel=True)
+            create("legacy-" + channel, channel, [batch_topic(channel)])
+            create("legacy-single-" + channel, channel, [SHARED + ".single"], standalone=True)
+        create("cancel-before-cutover", "sms", [SHARED + ".single"], cancel=True, standalone=True)
         require(exp.stats()["attempts"] == 0, "expected legacy backlog before workers started")
-        replace("worker", candidate, "dual-read")
+        replace("worker", candidate, "read-isolated")
         wait_until(all_final, "dual readers drain backlog written by legacy API")
-        stage("Dual readers drained legacy batch work; the old API remained live.")
+        stage("Dual readers drained legacy standalone and batch work; the old API remained live.")
 
         # One definite pre-send failure. Stop the worker while the retry is
         # persisted. No test-only writes to business tables or clocks.
         exp.env["PROVIDER_URL"] = "http://provider:1/send"
-        replace("worker", candidate, "dual-read")
-        retry = create("retry-across-cutover", "email", [SHARED, split("email")])
+        replace("worker", candidate, "read-isolated")
+        retry = create("retry-across-cutover", "email", [SHARED + ".single", single_topic("email")], standalone=True)
         exp.expect(retry, "retry_wait")
         exp.compose("stop", "worker")
         require(exp.get_state(retry) == "retry_wait", "retry advanced before shutdown")
         del exp.env["PROVIDER_URL"]
-        create("scheduled-by-legacy", "push", [split("push")], scheduled=True)
+        create("scheduled-by-legacy", "push", [single_topic("push")], scheduled=True, standalone=True)
         exp.compose("stop", "connect")
-        create("legacy-during-cdc-outage", "push", [SHARED])
-        replace("api", candidate, "channel")
+        create("legacy-during-cdc-outage", "push", [SHARED + ".single"], standalone=True)
+        replace("api", candidate, "isolated")
         for channel in RECIPIENTS:
-            create("new-" + channel, channel, [split(channel)])
-        create("standalone-control", "push", [SHARED + ".single"], standalone=True)
+            create("new-batch-" + channel, channel, [batch_topic(channel)])
+            create("new-single-" + channel, channel, [single_topic(channel)], standalone=True)
         checkpoint = exp.stats()["attempts"]
-        replace("worker", candidate, "channel")
+        replace("worker", candidate, "isolated")
         wait_until(lambda: exp.get_state(retry) == "pending" and
                    exp.get_state(jobs["scheduled-by-legacy"]["id"]) == "pending",
                    "new scheduler promotes pre-cutover retry and scheduled job")
@@ -131,15 +138,15 @@ def main(report_path):
 
         exp.compose("stop", "connect")
         for channel in RECIPIENTS:
-            create("rollback-queued-" + channel, channel, [split(channel)])
-        replace("worker", candidate, "dual-read")
-        replace("api", baseline, "shared")
-        create("rollback-shared", "email", [SHARED])
+            create("rollback-queued-" + channel, channel, [single_topic(channel)], standalone=True)
+        replace("worker", candidate, "read-isolated")
+        replace("api", baseline, "channel")
+        create("rollback-shared", "email", [SHARED + ".single"], standalone=True)
         exp.compose("start", "connect")
         wait_until(all_final, "dual readers drain split records emitted before writer rollback")
         proof["committedBeforeReaderDowngrade"] = wait_until(committed, "published and committed topic totals")
-        replace("worker", baseline, "shared")
-        create("legacy-after-rollback", "sms", [SHARED])
+        replace("worker", baseline, "channel")
+        create("legacy-after-rollback", "sms", [SHARED + ".single"], standalone=True)
         wait_until(all_final, "restored baseline handles fresh shared record")
         stage("Legacy readers resumed after publication and offset reconciliation.")
 
