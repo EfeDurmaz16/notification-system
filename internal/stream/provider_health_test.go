@@ -17,9 +17,16 @@ import (
 func TestProviderCooldownRequiresConsecutiveFailuresForOneChannel(t *testing.T) {
 	var health providerHealth
 	now := time.Now()
-	for _, status := range []int{503, 504, 202, 503, 504, 422, 503, 504} {
-		if health.shouldPause("sms", status, "", now) {
-			t.Fatalf("healthy response should have reset earlier failures, status=%d", status)
+	for _, outcome := range []struct {
+		status int
+		reason string
+	}{
+		{503, "provider_outcome_unknown"}, {504, "provider_outcome_unknown"}, {202, "provider_accepted"},
+		{503, "provider_outcome_unknown"}, {504, "provider_outcome_unknown"}, {422, "provider_rejected"},
+		{503, "provider_outcome_unknown"}, {504, "provider_outcome_unknown"},
+	} {
+		if health.shouldPause("sms", outcome.status, outcome.reason, now) {
+			t.Fatalf("healthy response should have reset earlier failures, status=%d", outcome.status)
 		}
 	}
 	if health.shouldPause("email", http.StatusServiceUnavailable, "", now) {
@@ -37,6 +44,55 @@ func TestProviderCooldownRequiresConsecutiveFailuresForOneChannel(t *testing.T) 
 		if got := health.shouldPause("sms", 503, "", now.Add(providerPause)); got != (i == 2) {
 			t.Fatalf("post-cooldown failure %d: new pause = %v", i+1, got)
 		}
+	}
+}
+
+func TestProviderFailureStreakUsesOutcomeEvidence(t *testing.T) {
+	for _, tc := range []struct {
+		name, reason string
+		status       int
+		// After two 503s, an endpoint failure trips immediately, a neutral
+		// observation needs one more failure and a confirmed result needs three.
+		moreFailures int
+	}{
+		{"server error", "provider_outcome_unknown", 500, 0},
+		{"throttled", "provider_outcome_unknown", 429, 0},
+		{"unauthorized", "provider_unauthorized", 401, 0},
+		{"failed dial", "dial_failed", 0, 0},
+		{"lost response", "transport_outcome_unknown", 0, 0},
+		{"inaccessible endpoint", "provider_endpoint_access", 404, 0},
+		{"malformed receipt", "malformed_ack", 202, 0},
+		{"missing receipt", "missing_ack", 200, 0},
+		{"unexpected receipt status", "unexpected_ack_status", 200, 0},
+		{"request timeout", "provider_outcome_unknown", 408, 1},
+		{"conflict", "provider_outcome_unknown", 409, 1},
+		{"gone", "provider_outcome_unknown", 410, 1},
+		{"redirect", "provider_outcome_unknown", 307, 1},
+		{"local deadline", "deadline_before_dispatch", 0, 1},
+		{"accepted receipt", "provider_accepted", 202, 3},
+		{"content rejection", "provider_rejected", 422, 3},
+		{"forbidden recipient", "provider_forbidden", 403, 3},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var h providerHealth
+			now := time.Now()
+			fail := func() bool { return h.shouldPause("sms", 503, "provider_outcome_unknown", now) }
+			for range 2 {
+				if fail() {
+					t.Fatal("two failures tripped the cooldown")
+				}
+			}
+			paused := h.shouldPause("sms", tc.status, tc.reason, now)
+			for i := 0; i < tc.moreFailures; i++ {
+				if paused {
+					t.Fatalf("tripped after %d additional failures, want %d", i, tc.moreFailures)
+				}
+				paused = fail()
+			}
+			if !paused {
+				t.Fatalf("cooldown did not trip after %d additional failures", tc.moreFailures)
+			}
+		})
 	}
 }
 
