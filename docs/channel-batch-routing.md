@@ -4,6 +4,12 @@ A fresh Compose stack routes each priority and ingress lane by channel. At norma
 
 Each standalone channel topic has three partitions so up to three replicas can own partitions for one hot channel and priority. Batch channel topics have one partition each. The fetch budget within each priority and lane is divided across the three channel readers, with at least one record per reader. The original shared topics remain readable during rollout.
 
+## What the local scaling test showed
+
+With three workers already running, increasing each SMS batch topic from one to three partitions cut the time for 10,000 SMS from 25.4 to 14.0 seconds. On three partitions per priority, 100,000 SMS took 288.5 seconds with one worker, 174.8 seconds when the queue triggered scaling from one to three, and 170.1 seconds with three workers ready at the start.
+
+The experimental quota allowed 10,000 attempts/s. The scaling run averaged 572 provider acceptances/s. At 20 ms per provider call, sustaining 10,000/s would require at least 200 concurrent calls, while three workers had 72 send slots in total. Each configuration ran once against the local provider. At the delivery quota of 100/s, scaling cut a 3,000-SMS burst from 38.1 to 36.3 seconds.
+
 ## Modes
 
 Set `BATCH_ROUTING` on both the API and workers. Workers also publish when promoting scheduled jobs and retries. Existing outbox records retain their original destination. Every mode reads the original shared topics.
