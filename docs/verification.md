@@ -1,6 +1,6 @@
 # Verification
 
-Use Docker Engine with Compose v2, Go 1.26.11, Git, Make, Bash and Python 3 for the host-side suite. Install [golangci-lint v2.12.2](https://golangci-lint.run/docs/welcome/install/local/) and put the binary on your PATH. The first run needs internet access for images, Go modules and the pinned OpenAPI validator. Keep the default API and provider URLs on localhost. The local suite uses a recording HTTP provider and synthetic recipients.
+Use Docker Engine with Compose v2, Go 1.26.11, Git, Make, Bash, Python 3 and the PostgreSQL `psql` client for the host-side suite. The retention integration test invokes `psql` directly. Install [golangci-lint v2.12.2](https://golangci-lint.run/docs/welcome/install/local/) and put the binary on your PATH. The first run needs internet access for images, Go modules and the pinned OpenAPI validator. Keep the default API and provider URLs on localhost. The local suite uses a recording HTTP provider and synthetic recipients.
 
 ```sh
 make verify-all RESULTS=.local/verification

@@ -32,7 +32,7 @@ To exercise the **external provider in the assessment**, run `scripts/webhook-sm
 | What happened when a worker died? | [Graceful exit](reports/worker-drain/README.md), [hard stop with a per-ID audit](reports/channel-cutover/rebalance/README.md) |
 | Which version ran the 108,000-ID test? | [v1.1.0 report and build provenance](https://github.com/EfeDurmaz16/notification-system/releases/download/v1.1.0/notification-system-verification-report.md), [raw evidence archive](https://github.com/EfeDurmaz16/notification-system/releases/tag/v1.1.0) |
 
-In that 15-minute **v1.1.0** run (`fa3042f`, independent SMS, email and push batch readers), the local simulator recorded one POST per ID. Each channel received 36,000 notifications: 35,640 acknowledgements, 180 deliberate rejections and 180 deliberately lost responses. The candidate chose the delivery guarantees and scheduling trade-offs. A coding assistant implemented those choices and ran the experiments. [Decision history](docs/decision-history.md)
+In that 15-minute **v1.1.0** run (`fa3042f`, independent SMS, email and push batch readers), the local simulator recorded one POST per ID. Each channel received 36,000 notifications: 35,640 acknowledgements, 180 deliberate rejections and 180 deliberately lost responses.
 
 ## Delivery path
 
@@ -53,7 +53,8 @@ flowchart LR
 - **Admission.** A required `Idempotency-Key` identifies each create request. Repeating the same key and body returns the original IDs. Batch admission returns indexed errors for invalid items. Both the 1,000-item maximum and the 5 MiB request-body limit apply.
 - **Dispatch.** PostgreSQL keeps the payload. Kafka distributes ready IDs. A shared worker pool selects high, normal and low priority in a 6:3:1 ratio when all are ready. Within a priority, batches receive a default 20% share while standalone traffic is waiting. Independent batch readers keep an email or push batch from sitting behind an SMS campaign on the same Kafka partition.
 - **Cancellation.** A notification can be cancelled while waiting for quota. Cancellation and the first send compete for the same PostgreSQL row. Once the worker changes it to `sending`, cancellation closes. A replay cannot claim the same attempt twice.
-- **Retries.** A confirmed pre-send failure can retry with exponential backoff and jitter. A timeout after the POST or an invalid receipt leaves a webhook-style provider outcome `unknown`. A gateway may return 503 or 504 after the provider accepted the request. Repeating it safely requires a provider guarantee. See the [retry settings and recovery rules](docs/decisions.md#implementation-choices-for-this-assessment). Repeated endpoint failures [pause new attempts on the affected channel](docs/operations.md#provider-outage-cooldown).
+- **Retries.** The local simulator declines a throttled POST before accepting the notification. Its `429` triggers a retry after at least `Retry-After`. The default budget is six total attempts with exponential backoff and jitter starting from two seconds. For an external provider, enable `PROVIDER_429_NOT_ACCEPTED=true` only if its contract guarantees this behavior. A gateway `503` with `Retry-After` leaves a non-idempotent submission `unknown`. [Retry policy](docs/decisions.md#implementation-choices-for-this-assessment)
+- **Receipts and diagnosis.** The assessment's Webhook.site contract uses HTTP 202 with a message ID, accepted status and a formatted timestamp. An empty 200, an ID alone or the literal placeholder `ISO8601` provides insufficient evidence for that contract. The status API exposes the recorded reason and provider HTTP code. Use the create request's `X-Correlation-ID` to find its structured API and worker logs. [Example receipt](docs/webhook-site.md) · [Operator guide](docs/operations.md)
 
 ## API and verification
 
@@ -76,6 +77,8 @@ flowchart LR
 
 For a port conflict, set `API_PORT=18080` before starting Compose and use `http://127.0.0.1:18080`. `docker compose down` stops the stack and retains its data. The [verification guide](docs/verification.md) lists host prerequisites, timings and result files. The [operations guide](docs/operations.md) covers queues, investigation by ID and ambiguous outcomes. [Tracing](docs/tracing.md) and the [historical outcome report](docs/outcome-report.md) cover cross-service diagnosis and UTC reporting.
 
+I chose the delivery guarantees and scheduling policy. I used a coding assistant to implement those decisions and run the experiments. The [decision history](docs/decision-history.md) records which measurements changed my choices.
+
 ## Operating limits and further improvements
 
 | Current boundary | Next change and evidence needed |
@@ -83,4 +86,4 @@ For a port conflict, set `API_PORT=18080` before starting Compose and use `http:
 | Webhook.site simulates HTTP acceptance. Production providers differ on rate limits, idempotency windows and receipts. | Test a lost acknowledgement and a documented throttle response against the actual provider. Identify a stable reference for lookup before enabling automatic reconciliation. |
 | Compose runs a single PostgreSQL, Kafka and Redis node. Replay keys are retained. Cleanup of history and published outbox events is opt-in. | Choose [retention windows and a cleanup schedule](docs/persistence.md), then validate failover and disk use under sustained writes. A seeded 2.16-million-row database took 444 ms per median metrics scrape in the [original volume experiment](reports/volume-simulation/README.md). |
 | The caller supplies recipients in a single trusted namespace. | For multi-tenant traffic, authenticate and scope keys and reads by tenant. For audience selection, add campaign progress and consent checks. |
-| Readers separate batch channels. Send slots are shared. | Measure slot occupancy under a slow provider before introducing channel-specific limits. [Routing measurements and rollback](docs/channel-batch-routing.md) |
+| Batch channels have independent readers. Standalone channels share a topic per priority, so an SMS backlog can delay email before dispatch. | Compare channel-specific standalone readers under a mixed backlog, then measure the cost in idle readers and rebalance time. [Routing measurements and rollback](docs/channel-batch-routing.md) |

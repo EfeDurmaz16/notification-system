@@ -64,7 +64,7 @@ All worker replicas in a deployment must use the same database, Kafka cluster, c
 | `REDIS_ADDR` | Shared rate limiter in host:port form. |
 | `LOG_LEVEL` | JSON log threshold for API and worker. Default `INFO` includes HTTP access status and confirmed provider acceptances. |
 | `RETRY_MAX_ATTEMPTS`, `RETRY_BASE_BACKOFF` | Six total attempts by default, with equal jitter on a two-second starting delay. Applies only to eligible retries. |
-| `PROVIDER_429_NOT_ACCEPTED` | Set only for a provider that guarantees a throttled POST has no side effect. Defaults to false. |
+| `PROVIDER_429_NOT_ACCEPTED` | Defaults to true for the bundled `http://provider:8081/send` and false for every other URL. Enable for an external provider only with a guarantee that the throttled POST has no side effect. |
 | `WORKER_CONCURRENCY` | Total active worker slots in one replica. Compose starts with 24. |
 | `BATCH_ROUTING` | Compose defaults to `channel` and the binary alone defaults to `shared`. Use `dual-read` during migration. See the [routing guide](channel-batch-routing.md). |
 | `BATCH_SHARE_PERCENT` | Batch dispatch share from 1 to 49 within a priority when both lanes have work ready on a replica. The initial default is 20. Use the same setting on all workers. |
@@ -84,8 +84,10 @@ The percentage counts dispatch turns within each priority on a worker. If a Kafk
 
 Kafka lag, partition assignment and outstanding sends affect the share of send claims observed across the deployment. For low priority, inspect the `delivery.low.single` standalone group, the `delivery.low.batch.sms`, `delivery.low.batch.email` and `delivery.low.batch.push` channel groups, and the `delivery.low` group for legacy work.
 
+Workers log `Kafka broker connection failed` on a broker dial or connection initialization failure, even when the Kafka client retries internally. All readers on a worker share one warning per 30 seconds. The warning includes the numeric broker ID and error type. Check broker health, connectivity and credentials if it repeats.
+
 ### Provider outage cooldown
 
 After one replica sees three consecutive endpoint failures on the same channel, Redis pauses new quota grants for that channel across all replicas for 30 seconds. HTTP 5xx, 429, 401, connection failures and malformed acknowledgements count toward the threshold. A valid acceptance or a recipient/content rejection clears that replica's streak. Inspect worker logs for `provider admissions paused` and the reported channel and HTTP status. For 401, verify provider credentials before expecting recovery. A 403 or 404 can be specific to a recipient and does not trip the gate.
 
-A queued notification keeps its current state until it can obtain a permit. Work already admitted can still reach the provider, and its outcome follows the normal retry rules. Expiry resumes paced admission; a continuing outage can open another cooldown. The threshold is local to each replica, so sparse failures spread over different replicas can take longer to trigger protection. A pause never resends an `unknown` notification.
+A queued notification keeps its current state until it can obtain a permit. Work already admitted can still reach the provider, and its outcome follows the normal retry rules. Expiry resumes paced admission. A replica that tripped its threshold discards that streak and ignores responses observed during its cooldown. It must then see three fresh consecutive failures to request another pause. The threshold is local to each replica, so sparse failures spread over different replicas can take longer to trigger protection. A pause never resends an `unknown` notification.
