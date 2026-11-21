@@ -1,0 +1,1109 @@
+{
+  "policy": "feedback",
+  "cohort": "309aad5605af416099d4d0421ffcd4ad",
+  "phaseSeconds": 25,
+  "offered": 12250,
+  "statuses": {
+    "accepted": 12250
+  },
+  "receiptAudit": {
+    "checked": 12250,
+    "statesAndPOSTs": {
+      "accepted/1": 12250
+    },
+    "exceptions": []
+  },
+  "provider": {
+    "attempts": 12250,
+    "accepted": 12250,
+    "deduplicated": 0,
+    "failures": 0,
+    "responseLost": 0,
+    "channels": {
+      "sms": {
+        "attempts": 12250,
+        "peakPerSecond": 94
+      }
+    }
+  },
+  "p95Seconds": 25.135,
+  "p99Seconds": 26.863,
+  "terminalSecondsFromStart": 174.705,
+  "acceptedPerSecondThroughWaveAndDrain": 70.0,
+  "peakSampledPending": 1934,
+  "peakSampledOldestPendingSeconds": 28.12,
+  "replicaSecondsDuringWave": 392.76,
+  "handlerSecondsDuringWave": 9426.24,
+  "createResponseP95Ms": 9.909,
+  "generatorDelayP95Ms": 5.129,
+  "generatorDelayMaxMs": 6.601,
+  "phases": [
+    {
+      "phase": 1,
+      "offeredPerSecond": 20,
+      "accepted": 500,
+      "p95Seconds": 0.297,
+      "maxPending": 10
+    },
+    {
+      "phase": 2,
+      "offeredPerSecond": 60,
+      "accepted": 1500,
+      "p95Seconds": 0.287,
+      "maxPending": 17
+    },
+    {
+      "phase": 3,
+      "offeredPerSecond": 90,
+      "accepted": 2250,
+      "p95Seconds": 7.18,
+      "maxPending": 310
+    },
+    {
+      "phase": 4,
+      "offeredPerSecond": 150,
+      "accepted": 3750,
+      "p95Seconds": 21.859,
+      "maxPending": 1768
+    },
+    {
+      "phase": 5,
+      "offeredPerSecond": 90,
+      "accepted": 2250,
+      "p95Seconds": 26.539,
+      "maxPending": 1934
+    },
+    {
+      "phase": 6,
+      "offeredPerSecond": 60,
+      "accepted": 1500,
+      "p95Seconds": 26.374,
+      "maxPending": 1902
+    },
+    {
+      "phase": 7,
+      "offeredPerSecond": 20,
+      "accepted": 500,
+      "p95Seconds": 12.912,
+      "maxPending": 1253
+    }
+  ],
+  "scaleActions": [
+    {
+      "s": 58.105,
+      "from": 1,
+      "to": 2,
+      "pending": 104,
+      "oldestPendingSeconds": 1.214,
+      "reason": "pending >= 100 and oldest >= 1s"
+    },
+    {
+      "s": 70.124,
+      "from": 2,
+      "to": 3,
+      "pending": 300,
+      "oldestPendingSeconds": 5.677,
+      "reason": "pending >= 100 and oldest >= 1s"
+    },
+    {
+      "s": 182.284,
+      "from": 3,
+      "to": 2,
+      "pending": 0,
+      "oldestPendingSeconds": 0.0,
+      "reason": "pending <= 20 and oldest < 0.6s for 12s"
+    },
+    {
+      "s": 196.314,
+      "from": 2,
+      "to": 1,
+      "pending": 0,
+      "oldestPendingSeconds": 0.0,
+      "reason": "pending <= 20 and oldest < 0.6s for 12s"
+    }
+  ],
+  "timeline": [
+    {
+      "s": 0.0,
+      "replicas": 1,
+      "pending": 0,
+      "oldestPendingSeconds": 0.0,
+      "providerPosts": 8
+    },
+    {
+      "s": 2.005,
+      "replicas": 1,
+      "pending": 0,
+      "oldestPendingSeconds": 0.0,
+      "providerPosts": 47
+    },
+    {
+      "s": 4.006,
+      "replicas": 1,
+      "pending": 0,
+      "oldestPendingSeconds": 0.0,
+      "providerPosts": 90
+    },
+    {
+      "s": 6.011,
+      "replicas": 1,
+      "pending": 10,
+      "oldestPendingSeconds": 0.007,
+      "providerPosts": 129
+    },
+    {
+      "s": 8.014,
+      "replicas": 1,
+      "pending": 10,
+      "oldestPendingSeconds": 0.014,
+      "providerPosts": 167
+    },
+    {
+      "s": 10.019,
+      "replicas": 1,
+      "pending": 10,
+      "oldestPendingSeconds": 0.016,
+      "providerPosts": 208
+    },
+    {
+      "s": 12.023,
+      "replicas": 1,
+      "pending": 10,
+      "oldestPendingSeconds": 0.019,
+      "providerPosts": 247
+    },
+    {
+      "s": 14.027,
+      "replicas": 1,
+      "pending": 10,
+      "oldestPendingSeconds": 0.024,
+      "providerPosts": 290
+    },
+    {
+      "s": 16.032,
+      "replicas": 1,
+      "pending": 10,
+      "oldestPendingSeconds": 0.026,
+      "providerPosts": 329
+    },
+    {
+      "s": 18.033,
+      "replicas": 1,
+      "pending": 10,
+      "oldestPendingSeconds": 0.029,
+      "providerPosts": 367
+    },
+    {
+      "s": 20.038,
+      "replicas": 1,
+      "pending": 10,
+      "oldestPendingSeconds": 0.033,
+      "providerPosts": 410
+    },
+    {
+      "s": 22.041,
+      "replicas": 1,
+      "pending": 9,
+      "oldestPendingSeconds": 0.036,
+      "providerPosts": 450
+    },
+    {
+      "s": 24.043,
+      "replicas": 1,
+      "pending": 10,
+      "oldestPendingSeconds": 0.038,
+      "providerPosts": 490
+    },
+    {
+      "s": 26.044,
+      "replicas": 1,
+      "pending": 17,
+      "oldestPendingSeconds": 0.206,
+      "providerPosts": 567
+    },
+    {
+      "s": 28.045,
+      "replicas": 1,
+      "pending": 14,
+      "oldestPendingSeconds": 0.208,
+      "providerPosts": 690
+    },
+    {
+      "s": 30.05,
+      "replicas": 1,
+      "pending": 15,
+      "oldestPendingSeconds": 0.215,
+      "providerPosts": 808
+    },
+    {
+      "s": 32.051,
+      "replicas": 1,
+      "pending": 16,
+      "oldestPendingSeconds": 0.211,
+      "providerPosts": 929
+    },
+    {
+      "s": 34.055,
+      "replicas": 1,
+      "pending": 10,
+      "oldestPendingSeconds": 0.051,
+      "providerPosts": 1050
+    },
+    {
+      "s": 36.06,
+      "replicas": 1,
+      "pending": 13,
+      "oldestPendingSeconds": 0.223,
+      "providerPosts": 1169
+    },
+    {
+      "s": 38.063,
+      "replicas": 1,
+      "pending": 17,
+      "oldestPendingSeconds": 0.225,
+      "providerPosts": 1288
+    },
+    {
+      "s": 40.067,
+      "replicas": 1,
+      "pending": 12,
+      "oldestPendingSeconds": 0.233,
+      "providerPosts": 1414
+    },
+    {
+      "s": 42.072,
+      "replicas": 1,
+      "pending": 10,
+      "oldestPendingSeconds": 0.067,
+      "providerPosts": 1533
+    },
+    {
+      "s": 44.077,
+      "replicas": 1,
+      "pending": 11,
+      "oldestPendingSeconds": 0.236,
+      "providerPosts": 1653
+    },
+    {
+      "s": 46.082,
+      "replicas": 1,
+      "pending": 12,
+      "oldestPendingSeconds": 0.249,
+      "providerPosts": 1771
+    },
+    {
+      "s": 48.084,
+      "replicas": 1,
+      "pending": 11,
+      "oldestPendingSeconds": 0.246,
+      "providerPosts": 1891
+    },
+    {
+      "s": 50.088,
+      "replicas": 1,
+      "pending": 10,
+      "oldestPendingSeconds": 0.083,
+      "providerPosts": 2011
+    },
+    {
+      "s": 52.092,
+      "replicas": 1,
+      "pending": 49,
+      "oldestPendingSeconds": 0.753,
+      "providerPosts": 2160
+    },
+    {
+      "s": 54.097,
+      "replicas": 1,
+      "pending": 70,
+      "oldestPendingSeconds": 0.981,
+      "providerPosts": 2315
+    },
+    {
+      "s": 56.1,
+      "replicas": 1,
+      "pending": 86,
+      "oldestPendingSeconds": 1.098,
+      "providerPosts": 2484
+    },
+    {
+      "s": 58.105,
+      "replicas": 1,
+      "pending": 104,
+      "oldestPendingSeconds": 1.214,
+      "providerPosts": 2643
+    },
+    {
+      "s": 60.11,
+      "replicas": 2,
+      "pending": 119,
+      "oldestPendingSeconds": 1.775,
+      "providerPosts": 2809
+    },
+    {
+      "s": 62.113,
+      "replicas": 2,
+      "pending": 236,
+      "oldestPendingSeconds": 3.778,
+      "providerPosts": 2854
+    },
+    {
+      "s": 64.114,
+      "replicas": 2,
+      "pending": 285,
+      "oldestPendingSeconds": 4.11,
+      "providerPosts": 3003
+    },
+    {
+      "s": 66.115,
+      "replicas": 2,
+      "pending": 287,
+      "oldestPendingSeconds": 4.444,
+      "providerPosts": 3180
+    },
+    {
+      "s": 68.12,
+      "replicas": 2,
+      "pending": 298,
+      "oldestPendingSeconds": 5.443,
+      "providerPosts": 3360
+    },
+    {
+      "s": 70.124,
+      "replicas": 2,
+      "pending": 300,
+      "oldestPendingSeconds": 5.677,
+      "providerPosts": 3537
+    },
+    {
+      "s": 72.128,
+      "replicas": 3,
+      "pending": 304,
+      "oldestPendingSeconds": 6.126,
+      "providerPosts": 3715
+    },
+    {
+      "s": 74.132,
+      "replicas": 3,
+      "pending": 310,
+      "oldestPendingSeconds": 5.685,
+      "providerPosts": 3887
+    },
+    {
+      "s": 76.136,
+      "replicas": 3,
+      "pending": 406,
+      "oldestPendingSeconds": 6.466,
+      "providerPosts": 4016
+    },
+    {
+      "s": 78.14,
+      "replicas": 3,
+      "pending": 582,
+      "oldestPendingSeconds": 7.804,
+      "providerPosts": 4159
+    },
+    {
+      "s": 80.142,
+      "replicas": 3,
+      "pending": 710,
+      "oldestPendingSeconds": 8.914,
+      "providerPosts": 4337
+    },
+    {
+      "s": 82.143,
+      "replicas": 3,
+      "pending": 828,
+      "oldestPendingSeconds": 9.253,
+      "providerPosts": 4520
+    },
+    {
+      "s": 84.144,
+      "replicas": 3,
+      "pending": 945,
+      "oldestPendingSeconds": 9.074,
+      "providerPosts": 4706
+    },
+    {
+      "s": 86.148,
+      "replicas": 3,
+      "pending": 1062,
+      "oldestPendingSeconds": 9.347,
+      "providerPosts": 4886
+    },
+    {
+      "s": 88.151,
+      "replicas": 3,
+      "pending": 1180,
+      "oldestPendingSeconds": 10.547,
+      "providerPosts": 5068
+    },
+    {
+      "s": 90.156,
+      "replicas": 3,
+      "pending": 1298,
+      "oldestPendingSeconds": 11.886,
+      "providerPosts": 5251
+    },
+    {
+      "s": 92.161,
+      "replicas": 3,
+      "pending": 1416,
+      "oldestPendingSeconds": 12.156,
+      "providerPosts": 5437
+    },
+    {
+      "s": 94.166,
+      "replicas": 3,
+      "pending": 1534,
+      "oldestPendingSeconds": 12.764,
+      "providerPosts": 5615
+    },
+    {
+      "s": 96.169,
+      "replicas": 3,
+      "pending": 1651,
+      "oldestPendingSeconds": 12.967,
+      "providerPosts": 5802
+    },
+    {
+      "s": 98.171,
+      "replicas": 3,
+      "pending": 1768,
+      "oldestPendingSeconds": 14.702,
+      "providerPosts": 5979
+    },
+    {
+      "s": 100.172,
+      "replicas": 3,
+      "pending": 1879,
+      "oldestPendingSeconds": 15.17,
+      "providerPosts": 6162
+    },
+    {
+      "s": 102.176,
+      "replicas": 3,
+      "pending": 1883,
+      "oldestPendingSeconds": 15.971,
+      "providerPosts": 6334
+    },
+    {
+      "s": 104.176,
+      "replicas": 3,
+      "pending": 1882,
+      "oldestPendingSeconds": 16.705,
+      "providerPosts": 6515
+    },
+    {
+      "s": 106.177,
+      "replicas": 3,
+      "pending": 1880,
+      "oldestPendingSeconds": 17.172,
+      "providerPosts": 6698
+    },
+    {
+      "s": 108.177,
+      "replicas": 3,
+      "pending": 1879,
+      "oldestPendingSeconds": 17.84,
+      "providerPosts": 6880
+    },
+    {
+      "s": 110.178,
+      "replicas": 3,
+      "pending": 1877,
+      "oldestPendingSeconds": 19.577,
+      "providerPosts": 7062
+    },
+    {
+      "s": 112.179,
+      "replicas": 3,
+      "pending": 1875,
+      "oldestPendingSeconds": 20.442,
+      "providerPosts": 7243
+    },
+    {
+      "s": 114.183,
+      "replicas": 3,
+      "pending": 1875,
+      "oldestPendingSeconds": 21.249,
+      "providerPosts": 7423
+    },
+    {
+      "s": 116.188,
+      "replicas": 3,
+      "pending": 1872,
+      "oldestPendingSeconds": 21.784,
+      "providerPosts": 7609
+    },
+    {
+      "s": 118.191,
+      "replicas": 3,
+      "pending": 1871,
+      "oldestPendingSeconds": 22.254,
+      "providerPosts": 7787
+    },
+    {
+      "s": 120.192,
+      "replicas": 3,
+      "pending": 1873,
+      "oldestPendingSeconds": 22.857,
+      "providerPosts": 7965
+    },
+    {
+      "s": 122.195,
+      "replicas": 3,
+      "pending": 1934,
+      "oldestPendingSeconds": 24.793,
+      "providerPosts": 8087
+    },
+    {
+      "s": 124.197,
+      "replicas": 3,
+      "pending": 1933,
+      "oldestPendingSeconds": 25.659,
+      "providerPosts": 8266
+    },
+    {
+      "s": 126.198,
+      "replicas": 3,
+      "pending": 1902,
+      "oldestPendingSeconds": 26.327,
+      "providerPosts": 8447
+    },
+    {
+      "s": 128.198,
+      "replicas": 3,
+      "pending": 1840,
+      "oldestPendingSeconds": 25.75,
+      "providerPosts": 8629
+    },
+    {
+      "s": 130.203,
+      "replicas": 3,
+      "pending": 1777,
+      "oldestPendingSeconds": 25.531,
+      "providerPosts": 8811
+    },
+    {
+      "s": 132.205,
+      "replicas": 3,
+      "pending": 1717,
+      "oldestPendingSeconds": 25.204,
+      "providerPosts": 8991
+    },
+    {
+      "s": 134.21,
+      "replicas": 3,
+      "pending": 1656,
+      "oldestPendingSeconds": 26.764,
+      "providerPosts": 9173
+    },
+    {
+      "s": 136.213,
+      "replicas": 3,
+      "pending": 1593,
+      "oldestPendingSeconds": 26.657,
+      "providerPosts": 9356
+    },
+    {
+      "s": 138.217,
+      "replicas": 3,
+      "pending": 1532,
+      "oldestPendingSeconds": 26.769,
+      "providerPosts": 9537
+    },
+    {
+      "s": 140.221,
+      "replicas": 3,
+      "pending": 1469,
+      "oldestPendingSeconds": 26.107,
+      "providerPosts": 9723
+    },
+    {
+      "s": 142.222,
+      "replicas": 3,
+      "pending": 1409,
+      "oldestPendingSeconds": 25.995,
+      "providerPosts": 9900
+    },
+    {
+      "s": 144.225,
+      "replicas": 3,
+      "pending": 1348,
+      "oldestPendingSeconds": 25.667,
+      "providerPosts": 10081
+    },
+    {
+      "s": 146.228,
+      "replicas": 3,
+      "pending": 1334,
+      "oldestPendingSeconds": 26.334,
+      "providerPosts": 10213
+    },
+    {
+      "s": 148.229,
+      "replicas": 3,
+      "pending": 1325,
+      "oldestPendingSeconds": 27.78,
+      "providerPosts": 10344
+    },
+    {
+      "s": 150.232,
+      "replicas": 3,
+      "pending": 1253,
+      "oldestPendingSeconds": 27.899,
+      "providerPosts": 10534
+    },
+    {
+      "s": 152.235,
+      "replicas": 3,
+      "pending": 1112,
+      "oldestPendingSeconds": 28.12,
+      "providerPosts": 10706
+    },
+    {
+      "s": 154.24,
+      "replicas": 3,
+      "pending": 971,
+      "oldestPendingSeconds": 27.568,
+      "providerPosts": 10890
+    },
+    {
+      "s": 156.24,
+      "replicas": 3,
+      "pending": 830,
+      "oldestPendingSeconds": 26.068,
+      "providerPosts": 11078
+    },
+    {
+      "s": 158.244,
+      "replicas": 3,
+      "pending": 692,
+      "oldestPendingSeconds": 25.739,
+      "providerPosts": 11246
+    },
+    {
+      "s": 160.249,
+      "replicas": 3,
+      "pending": 547,
+      "oldestPendingSeconds": 26.577,
+      "providerPosts": 11430
+    },
+    {
+      "s": 162.253,
+      "replicas": 3,
+      "pending": 405,
+      "oldestPendingSeconds": 24.248,
+      "providerPosts": 11615
+    },
+    {
+      "s": 164.257,
+      "replicas": 3,
+      "pending": 277,
+      "oldestPendingSeconds": 22.755,
+      "providerPosts": 11781
+    },
+    {
+      "s": 166.261,
+      "replicas": 3,
+      "pending": 142,
+      "oldestPendingSeconds": 18.757,
+      "providerPosts": 11956
+    },
+    {
+      "s": 168.263,
+      "replicas": 3,
+      "pending": 11,
+      "oldestPendingSeconds": 4.759,
+      "providerPosts": 12120
+    },
+    {
+      "s": 170.268,
+      "replicas": 3,
+      "pending": 0,
+      "oldestPendingSeconds": 0.0,
+      "providerPosts": 12160
+    },
+    {
+      "s": 172.27,
+      "replicas": 3,
+      "pending": 0,
+      "oldestPendingSeconds": 0.0,
+      "providerPosts": 12200
+    },
+    {
+      "s": 174.274,
+      "replicas": 3,
+      "pending": 1,
+      "oldestPendingSeconds": 0.27,
+      "providerPosts": 12240
+    },
+    {
+      "s": 176.276,
+      "replicas": 3,
+      "pending": 0,
+      "oldestPendingSeconds": 0.0,
+      "providerPosts": 12250
+    },
+    {
+      "s": 178.277,
+      "replicas": 3,
+      "pending": 0,
+      "oldestPendingSeconds": 0.0,
+      "providerPosts": 12250
+    },
+    {
+      "s": 180.281,
+      "replicas": 3,
+      "pending": 0,
+      "oldestPendingSeconds": 0.0,
+      "providerPosts": 12250
+    },
+    {
+      "s": 182.284,
+      "replicas": 3,
+      "pending": 0,
+      "oldestPendingSeconds": 0.0,
+      "providerPosts": 12250
+    },
+    {
+      "s": 184.287,
+      "replicas": 2,
+      "pending": 0,
+      "oldestPendingSeconds": 0.0,
+      "providerPosts": 12250
+    },
+    {
+      "s": 186.292,
+      "replicas": 2,
+      "pending": 0,
+      "oldestPendingSeconds": 0.0,
+      "providerPosts": 12250
+    },
+    {
+      "s": 188.298,
+      "replicas": 2,
+      "pending": 0,
+      "oldestPendingSeconds": 0.0,
+      "providerPosts": 12250
+    },
+    {
+      "s": 190.303,
+      "replicas": 2,
+      "pending": 0,
+      "oldestPendingSeconds": 0.0,
+      "providerPosts": 12250
+    },
+    {
+      "s": 192.307,
+      "replicas": 2,
+      "pending": 0,
+      "oldestPendingSeconds": 0.0,
+      "providerPosts": 12250
+    },
+    {
+      "s": 194.312,
+      "replicas": 2,
+      "pending": 0,
+      "oldestPendingSeconds": 0.0,
+      "providerPosts": 12250
+    },
+    {
+      "s": 196.314,
+      "replicas": 2,
+      "pending": 0,
+      "oldestPendingSeconds": 0.0,
+      "providerPosts": 12250
+    }
+  ],
+  "kafkaSnapshots": [
+    {
+      "partitions": {
+        "2": {
+          "lag": 0,
+          "owner": "192.168.148.8"
+        },
+        "1": {
+          "lag": 0,
+          "owner": "192.168.148.8"
+        },
+        "0": {
+          "lag": 0,
+          "owner": "192.168.148.8"
+        }
+      },
+      "diagnostic": "",
+      "s": 1.279
+    },
+    {
+      "partitions": {
+        "2": {
+          "lag": 0,
+          "owner": "192.168.148.8"
+        },
+        "1": {
+          "lag": 0,
+          "owner": "192.168.148.8"
+        },
+        "0": {
+          "lag": 0,
+          "owner": "192.168.148.8"
+        }
+      },
+      "diagnostic": "",
+      "s": 14.478
+    },
+    {
+      "partitions": {
+        "2": {
+          "lag": 5,
+          "owner": "192.168.148.8"
+        },
+        "1": {
+          "lag": 3,
+          "owner": "192.168.148.8"
+        },
+        "0": {
+          "lag": 2,
+          "owner": "192.168.148.8"
+        }
+      },
+      "diagnostic": "",
+      "s": 27.65
+    },
+    {
+      "partitions": {
+        "2": {
+          "lag": 4,
+          "owner": "192.168.148.8"
+        },
+        "1": {
+          "lag": 2,
+          "owner": "192.168.148.8"
+        },
+        "0": {
+          "lag": 4,
+          "owner": "192.168.148.8"
+        }
+      },
+      "diagnostic": "",
+      "s": 40.947
+    },
+    {
+      "partitions": {
+        "2": {
+          "lag": 28,
+          "owner": "192.168.148.8"
+        },
+        "1": {
+          "lag": 20,
+          "owner": "192.168.148.8"
+        },
+        "0": {
+          "lag": 32,
+          "owner": "192.168.148.8"
+        }
+      },
+      "diagnostic": "",
+      "s": 54.223
+    },
+    {
+      "partitions": {
+        "1": {
+          "lag": 117,
+          "owner": "192.168.148.8"
+        },
+        "0": {
+          "lag": 142,
+          "owner": "192.168.148.8"
+        },
+        "2": {
+          "lag": 51,
+          "owner": "192.168.148.9"
+        }
+      },
+      "diagnostic": "",
+      "s": 67.467
+    },
+    {
+      "partitions": {
+        "2": {
+          "lag": 171,
+          "owner": "192.168.148.9"
+        },
+        "1": {
+          "lag": 375,
+          "owner": "192.168.148.10"
+        },
+        "0": {
+          "lag": 305,
+          "owner": "192.168.148.8"
+        }
+      },
+      "diagnostic": "",
+      "s": 80.657
+    },
+    {
+      "partitions": {
+        "2": {
+          "lag": 430,
+          "owner": "192.168.148.9"
+        },
+        "1": {
+          "lag": 670,
+          "owner": "192.168.148.10"
+        },
+        "0": {
+          "lag": 526,
+          "owner": "192.168.148.8"
+        }
+      },
+      "diagnostic": "",
+      "s": 93.839
+    },
+    {
+      "partitions": {
+        "2": {
+          "lag": 622,
+          "owner": "192.168.148.9"
+        },
+        "1": {
+          "lag": 757,
+          "owner": "192.168.148.10"
+        },
+        "0": {
+          "lag": 605,
+          "owner": "192.168.148.8"
+        }
+      },
+      "diagnostic": "",
+      "s": 107.046
+    },
+    {
+      "partitions": {
+        "2": {
+          "lag": 601,
+          "owner": "192.168.148.9"
+        },
+        "1": {
+          "lag": 812,
+          "owner": "192.168.148.10"
+        },
+        "0": {
+          "lag": 650,
+          "owner": "192.168.148.8"
+        }
+      },
+      "diagnostic": "",
+      "s": 120.245
+    },
+    {
+      "partitions": {
+        "2": {
+          "lag": 450,
+          "owner": "192.168.148.9"
+        },
+        "1": {
+          "lag": 761,
+          "owner": "192.168.148.10"
+        },
+        "0": {
+          "lag": 539,
+          "owner": "192.168.148.8"
+        }
+      },
+      "diagnostic": "",
+      "s": 133.458
+    },
+    {
+      "partitions": {
+        "2": {
+          "lag": 355,
+          "owner": "192.168.148.9"
+        },
+        "1": {
+          "lag": 615,
+          "owner": "192.168.148.10"
+        },
+        "0": {
+          "lag": 401,
+          "owner": "192.168.148.8"
+        }
+      },
+      "diagnostic": "",
+      "s": 146.728
+    },
+    {
+      "partitions": {
+        "2": {
+          "lag": 93,
+          "owner": "192.168.148.9"
+        },
+        "1": {
+          "lag": 383,
+          "owner": "192.168.148.10"
+        },
+        "0": {
+          "lag": 217,
+          "owner": "192.168.148.8"
+        }
+      },
+      "diagnostic": "",
+      "s": 159.953
+    },
+    {
+      "partitions": {
+        "2": {
+          "lag": 3,
+          "owner": "192.168.148.9"
+        },
+        "1": {
+          "lag": 6,
+          "owner": "192.168.148.10"
+        },
+        "0": {
+          "lag": 0,
+          "owner": "192.168.148.8"
+        }
+      },
+      "diagnostic": "",
+      "s": 173.203
+    },
+    {
+      "partitions": {
+        "2": {
+          "lag": 0,
+          "owner": "192.168.148.9"
+        },
+        "1": {
+          "lag": 0,
+          "owner": "192.168.148.9"
+        },
+        "0": {
+          "lag": 0,
+          "owner": "192.168.148.8"
+        }
+      },
+      "diagnostic": "",
+      "s": 186.417
+    }
+  ],
+  "finalKafka": {
+    "partitions": {
+      "2": {
+        "lag": 0,
+        "owner": "192.168.148.8"
+      },
+      "1": {
+        "lag": 0,
+        "owner": "192.168.148.8"
+      },
+      "0": {
+        "lag": 0,
+        "owner": "192.168.148.8"
+      }
+    },
+    "diagnostic": ""
+  }
+}

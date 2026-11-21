@@ -1,0 +1,26 @@
+{
+  "result": "pass",
+  "sourceTopic": "notifications.normal.single",
+  "partition": 0,
+  "consumerGroup": "delivery.normal.single",
+  "markerKey": "notifications.normal.single/0/0",
+  "markerValue": "notifications.normal.single/0/0",
+  "quarantineRecords": 1,
+  "afterMalformed": {
+    "sourceOffset": 0,
+    "providerPosts": 0,
+    "committed": 1,
+    "end": 1,
+    "lag": 0
+  },
+  "afterValid": {
+    "sourceOffset": 1,
+    "notificationId": "bb6f4f9e-28d7-409f-9f82-1128d89193c3",
+    "status": "accepted",
+    "providerPostsForId": 1,
+    "totalProviderPosts": 1,
+    "committed": 2,
+    "end": 2,
+    "lag": 0
+  }
+}
