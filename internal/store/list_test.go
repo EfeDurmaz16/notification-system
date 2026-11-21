@@ -57,4 +57,12 @@ func TestListFiltersAndPagination(t *testing.T) {
 			}
 		})
 	}
+	// An earlier timestamp sorts after the cursor even when its ID is greater.
+	rows, err := s.List(t.Context(), Filter{
+		Status: "pending", Channel: "sms", From: &start, To: &end,
+		Before: &ListPosition{CreatedAt: start.Add(time.Hour), ID: "00000000-0000-0000-0000-000000000000"},
+	})
+	if err != nil || len(rows) != 1 || rows[0].ID != oldest {
+		t.Fatalf("cursor between timestamps: got %+v, %v; want only %s", rows, err, oldest)
+	}
 }

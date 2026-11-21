@@ -17,6 +17,7 @@ LOAD_FLAGS ?=
 
 help:
 	@printf '%s\n' 'make check        Format check, vet, golangci-lint, unit tests, race detector, binaries' \
+		'make test         Unit tests and per-test skip reasons' \
 		'make vuln         Check reachable Go vulnerabilities using the current Go database' \
 		'make up / down    Start / stop Compose without deleting data' \
 		'make integration  Start Compose, run database integration tests and HTTP smoke test' \
@@ -45,7 +46,9 @@ vuln:
 	$(GO) run golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION) ./...
 
 test:
-	$(GO) test -count=1 ./...
+	@set -o pipefail; $(GO) test -v -count=1 ./... | awk '{ print } \
+		/^[[:space:]]*--- SKIP:/ { skipped++ } \
+		END { if (skipped) printf "\n%d Go tests skipped. Run make integration for service-backed tests or make ci for the full functional suite.\n", skipped }'
 	python3 -B -m unittest discover -s scripts -p 'test_*.py'
 
 race:

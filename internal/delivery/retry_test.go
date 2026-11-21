@@ -61,6 +61,7 @@ func TestProviderRetryAfterRequiresSafeRetry(t *testing.T) {
 	}{
 		{"unverified 429", 429, "30", false, false, 0, unknown},
 		{"contractual 429", 429, "30", true, false, 0, retryWait},
+		{"exactly 24 hours is supported", 429, "86400", true, false, 0, retryWait},
 		{"idempotent 503", 503, "30", false, true, time.Hour, retryWait},
 		{"ambiguous 503", 503, "30", true, false, 0, unknown},
 		{"ambiguous gateway timeout", 504, "", true, false, 0, unknown},
@@ -82,8 +83,11 @@ func TestProviderRetryAfterRequiresSafeRetry(t *testing.T) {
 			if store.state != tc.want {
 				t.Fatalf("got %s, want %s", store.state, tc.want)
 			}
-			if tc.want == retryWait && store.due.Before(start.Add(30*time.Second)) {
-				t.Fatalf("retry at %s ignores provider minimum", store.due)
+			if tc.want == retryWait {
+				delay, err := time.ParseDuration(tc.hint + "s")
+				if err != nil || store.due.Before(start.Add(delay)) {
+					t.Fatalf("retry at %s ignores Retry-After %q", store.due, tc.hint)
+				}
 			}
 			if tc.want != retryWait && !store.due.IsZero() {
 				t.Fatalf("unexpected retry at %s", store.due)

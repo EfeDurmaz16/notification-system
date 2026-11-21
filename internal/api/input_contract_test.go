@@ -24,6 +24,7 @@ func TestRecipientAndContentRules(t *testing.T) {
 		{"email over limit", "email", "ada@example.com", strings.Repeat("界", 10001), "normal", false},
 		{"email without domain", "email", "ada", "hello", "normal", false},
 		{"email with display name", "email", "Ada <ada@example.com>", "hello", "normal", false},
+		{"email address 254 bytes", "email", strings.Repeat("a", 64) + "@" + strings.Repeat("b", 63) + "." + strings.Repeat("c", 63) + "." + strings.Repeat("d", 61), "hello", "normal", true},
 		{"email address too long", "email", strings.Repeat("a", 245) + "@example.com", "hello", "normal", false},
 		{"push at limits", "push", strings.Repeat("a", 512), strings.Repeat("界", 256), "high", true},
 		{"push over limit", "push", "token", strings.Repeat("界", 257), "high", false},
@@ -34,6 +35,7 @@ func TestRecipientAndContentRules(t *testing.T) {
 		{"unsupported channel", "fax", "+12125551212", "hello", "normal", false},
 		{"unsupported priority", "sms", "+12125551212", "hello", "urgent", false},
 		{"blank content", "sms", "+12125551212", " \t", "high", false},
+		{"interior NUL in content", "sms", "+12125551212", "hello\x00there", "normal", false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			raw, err := json.Marshal(map[string]string{
