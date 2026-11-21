@@ -71,8 +71,8 @@ type Engine struct {
 }
 
 // Send is called after the worker has obtained a shared channel permit.
-// A worker shutdown cancels an unclaimed job. A successful durable claim
-// gives this attempt the right to finish within its original deadline.
+// Shutdown stops new claim attempts. Once a claim is in flight, await its
+// database reply and dispatch only if the matching pending row was claimed.
 func (e *Engine) Send(ctx context.Context, j Job) error {
 	ctx, end := observability.Delivery(ctx, j.Traceparent, j.ID)
 	defer end()
@@ -89,7 +89,11 @@ func (e *Engine) Send(ctx context.Context, j Job) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	claimed, err := e.Store.Start(ctx, j.ID, j.Attempt)
+	// PostgreSQL may have committed before its reply reaches us. Preserve the
+	// original send deadline while letting an in-flight claim drain on SIGTERM.
+	claimCtx, cancelClaim := context.WithTimeout(providerCtx, 30*time.Second)
+	claimed, err := e.Store.Start(claimCtx, j.ID, j.Attempt)
+	cancelClaim()
 	if err != nil {
 		return fmt.Errorf("claim send: %w", err)
 	}
