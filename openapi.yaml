@@ -24,6 +24,9 @@ paths:
       tags: [Notifications]
       operationId: createNotification
       summary: Submit one notification
+      description: |
+        A standalone notification uses the single lane for its priority.
+        Workers favor this lane when batch work of that priority is also ready.
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
@@ -142,7 +145,8 @@ paths:
       description: |
         Results use zero-based input indexes. Invalid recipients or content
         produce item errors. Retry a lost response with the original key and
-        original body to recover the same accepted IDs.
+        original body to recover the same accepted IDs. Each accepted item uses
+        its priority's batch lane, including when the request contains one item.
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:

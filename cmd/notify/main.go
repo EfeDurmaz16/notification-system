@@ -81,9 +81,13 @@ func run(ctx context.Context, args []string) error {
 	if err != nil || workers < 1 || workers > 512 {
 		return errors.New("WORKER_CONCURRENCY must be between 1 and 512")
 	}
+	batchShare, err := strconv.Atoi(env("BATCH_SHARE_PERCENT", strconv.Itoa(stream.DefaultBatchSharePercent)))
+	if err != nil || batchShare < 1 || batchShare > 49 {
+		return errors.New("BATCH_SHARE_PERCENT must be between 1 and 49")
+	}
 	brokers := strings.Split(env("KAFKA_BROKERS", "localhost:19092"), ",")
 	cfg := stream.Config{Brokers: brokers, Group: env("KAFKA_GROUP", "notification-delivery"),
-		RedisAddr: env("REDIS_ADDR", "localhost:16379"), Workers: workers}
+		RedisAddr: env("REDIS_ADDR", "localhost:16379"), Workers: workers, BatchSharePercent: batchShare}
 	engine := &delivery.Engine{Store: db, URL: endpoint, Idempotent: idempotent, IdempotencyWindow: window,
 		Client: &http.Client{Timeout: 5 * time.Second}}
 	recoveryWindow := time.Duration(0)

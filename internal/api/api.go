@@ -24,7 +24,7 @@ import (
 )
 
 type Repository interface {
-	Create(context.Context, string, []byte, []store.Item) (store.BatchResult, error)
+	Create(context.Context, string, []byte, store.Ingress, []store.Item) (store.BatchResult, error)
 	Get(context.Context, string) (store.Notification, error)
 	GetBatch(context.Context, string) (store.BatchResult, error)
 	Cancel(context.Context, string) error
@@ -152,8 +152,10 @@ func (s server) create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	batch := r.URL.Path == "/v1/batches"
+	ingress := store.SingleIngress
 	rawItems := []json.RawMessage{body}
 	if batch {
+		ingress = store.BatchIngress
 		var envelope struct {
 			Notifications []json.RawMessage `json:"notifications"`
 		}
@@ -172,7 +174,7 @@ func (s server) create(w http.ResponseWriter, r *http.Request) {
 	for i, raw := range rawItems {
 		items[i] = validateItem(raw)
 	}
-	res, err := s.repo.Create(r.Context(), key, hash, items)
+	res, err := s.repo.Create(r.Context(), key, hash, ingress, items)
 	if err != nil {
 		repositoryError(w, err)
 		return

@@ -1,0 +1,253 @@
+{
+  "utcStart": "2026-11-20T21:05:22.010347+00:00",
+  "image": "sha256:72c4be933d812e04689986bb857d5775cfaf94e9797d8f77fe12b50f73ddb179",
+  "share": 10,
+  "workerReplicas": 3,
+  "concurrencyEach": 24,
+  "minimumUnclaimedEachLane": 72,
+  "profiles": {
+    "saturated": {
+      "single": {
+        "arrivalSpanSeconds": 11.416,
+        "observedSingleIngressPerSecond": 140.07,
+        "count": 1600,
+        "queueP50Ms": 13705.24,
+        "queueP95Ms": 22947.02,
+        "acceptedP95Ms": 22968.98,
+        "drainSeconds": 34.536,
+        "acceptedPerSecond": 46.33
+      },
+      "batch": {
+        "arrivalSpanSeconds": 0.056,
+        "observedSingleIngressPerSecond": null,
+        "count": 1600,
+        "queueP50Ms": 15915.89,
+        "queueP95Ms": 31150.18,
+        "acceptedP95Ms": 31174.3,
+        "drainSeconds": 34.463,
+        "acceptedPerSecond": 46.43
+      },
+      "marker": "86d31177-5308-4bcd-8dbb-dc7f62623008",
+      "offeredSinglePerSecond": 140,
+      "providerDelta": {
+        "attempts": 3200,
+        "accepted": 3200,
+        "failures": 0,
+        "responseLost": 0,
+        "deduplicated": 0
+      },
+      "rollingSmsPeakSinceProviderStart": 93,
+      "contended": {
+        "seconds": 29,
+        "batchPercent": 52.09,
+        "batchPerSecond": 46.79,
+        "singlePerSecond": 43.03,
+        "bins": [
+          {
+            "second": 2,
+            "single": 36,
+            "batch": 55,
+            "minSingleQueued": 79,
+            "minBatchQueued": 1391
+          },
+          {
+            "second": 3,
+            "single": 46,
+            "batch": 44,
+            "minSingleQueued": 183,
+            "minBatchQueued": 1347
+          },
+          {
+            "second": 4,
+            "single": 31,
+            "batch": 58,
+            "minSingleQueued": 277,
+            "minBatchQueued": 1289
+          },
+          {
+            "second": 5,
+            "single": 49,
+            "batch": 42,
+            "minSingleQueued": 386,
+            "minBatchQueued": 1247
+          },
+          {
+            "second": 6,
+            "single": 39,
+            "batch": 51,
+            "minSingleQueued": 477,
+            "minBatchQueued": 1196
+          },
+          {
+            "second": 7,
+            "single": 47,
+            "batch": 34,
+            "minSingleQueued": 578,
+            "minBatchQueued": 1162
+          },
+          {
+            "second": 8,
+            "single": 43,
+            "batch": 48,
+            "minSingleQueued": 671,
+            "minBatchQueued": 1114
+          },
+          {
+            "second": 9,
+            "single": 43,
+            "batch": 48,
+            "minSingleQueued": 768,
+            "minBatchQueued": 1066
+          },
+          {
+            "second": 10,
+            "single": 38,
+            "batch": 52,
+            "minSingleQueued": 865,
+            "minBatchQueued": 1014
+          },
+          {
+            "second": 11,
+            "single": 52,
+            "batch": 37,
+            "minSingleQueued": 967,
+            "minBatchQueued": 977
+          },
+          {
+            "second": 12,
+            "single": 43,
+            "batch": 46,
+            "minSingleQueued": 1055,
+            "minBatchQueued": 931
+          },
+          {
+            "second": 13,
+            "single": 51,
+            "batch": 38,
+            "minSingleQueued": 1066,
+            "minBatchQueued": 893
+          },
+          {
+            "second": 14,
+            "single": 34,
+            "batch": 57,
+            "minSingleQueued": 1032,
+            "minBatchQueued": 836
+          },
+          {
+            "second": 15,
+            "single": 50,
+            "batch": 39,
+            "minSingleQueued": 982,
+            "minBatchQueued": 797
+          },
+          {
+            "second": 16,
+            "single": 29,
+            "batch": 61,
+            "minSingleQueued": 953,
+            "minBatchQueued": 736
+          },
+          {
+            "second": 17,
+            "single": 46,
+            "batch": 44,
+            "minSingleQueued": 907,
+            "minBatchQueued": 692
+          },
+          {
+            "second": 18,
+            "single": 29,
+            "batch": 61,
+            "minSingleQueued": 878,
+            "minBatchQueued": 631
+          },
+          {
+            "second": 19,
+            "single": 43,
+            "batch": 44,
+            "minSingleQueued": 835,
+            "minBatchQueued": 587
+          },
+          {
+            "second": 20,
+            "single": 42,
+            "batch": 50,
+            "minSingleQueued": 793,
+            "minBatchQueued": 537
+          },
+          {
+            "second": 21,
+            "single": 56,
+            "batch": 34,
+            "minSingleQueued": 737,
+            "minBatchQueued": 503
+          },
+          {
+            "second": 22,
+            "single": 45,
+            "batch": 46,
+            "minSingleQueued": 692,
+            "minBatchQueued": 457
+          },
+          {
+            "second": 23,
+            "single": 47,
+            "batch": 43,
+            "minSingleQueued": 645,
+            "minBatchQueued": 414
+          },
+          {
+            "second": 24,
+            "single": 48,
+            "batch": 41,
+            "minSingleQueued": 597,
+            "minBatchQueued": 373
+          },
+          {
+            "second": 25,
+            "single": 45,
+            "batch": 48,
+            "minSingleQueued": 552,
+            "minBatchQueued": 325
+          },
+          {
+            "second": 26,
+            "single": 51,
+            "batch": 40,
+            "minSingleQueued": 501,
+            "minBatchQueued": 285
+          },
+          {
+            "second": 27,
+            "single": 35,
+            "batch": 54,
+            "minSingleQueued": 466,
+            "minBatchQueued": 231
+          },
+          {
+            "second": 28,
+            "single": 59,
+            "batch": 33,
+            "minSingleQueued": 407,
+            "minBatchQueued": 198
+          },
+          {
+            "second": 29,
+            "single": 34,
+            "batch": 56,
+            "minSingleQueued": 373,
+            "minBatchQueued": 142
+          },
+          {
+            "second": 30,
+            "single": 37,
+            "batch": 53,
+            "minSingleQueued": 336,
+            "minBatchQueued": 89
+          }
+        ]
+      }
+    }
+  }
+}

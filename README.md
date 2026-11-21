@@ -34,7 +34,7 @@ flowchart LR
     C[Client] --> A[Go API]
     A --> P[(PostgreSQL)]
     P -->|Outbox inserts via WAL| D[Debezium]
-    D --> K[Kafka priority topics]
+    D --> K[Single and batch topics per priority]
     K --> W[Delivery workers]
     W -->|Reserve channel slot| R[(Redis)]
     W -->|Conditional send claim| P
@@ -44,12 +44,14 @@ flowchart LR
 ```
 
 1. Create validates each item, expands templates and fingerprints the request. A transaction stores the batch replay response, immutable accepted payloads and ready outbox events. Invalid items get indexed errors. A repeated key and matching payload returns the original IDs. A conflicting valid payload gets HTTP 409.
-2. Debezium routes ready events to three priority topics. Each delivery event identifies a notification and an attempt generation. The worker fetches the current DB row. Future consumer groups can replay the event independently. The health of the replication slot and the WAL retained during a connector outage matter operationally.
-3. A bounded shared worker pool schedules available jobs with high:normal:low weights of 6:3:1. Empty classes yield capacity. Redis serializes reservations per channel, including retries. Independent notifications have no end-to-end ordering guarantee.
+2. Debezium routes ready events to a single or batch topic within each priority. The create endpoint sets the lane, including for one-item batches. PostgreSQL preserves it for scheduled deliveries and retries. Consumers load the notification by ID and attempt generation.
+3. The shared worker pool chooses a priority with weights 6:3:1 for high, normal and low. Within each priority, standalone requests get more turns. Batch requests continue to receive turns during sustained standalone traffic. Either lane can take all available turns when the other is empty. Both share the channel's Redis quota.
 4. A worker changes the matching pending generation to sending in PostgreSQL before making a POST. A successful cancellation prevents that transition. Even if Kafka replays a ready event, the DB predicate fences workers from consuming the same send right.
 5. The worker stores the outcome before the consumer commits the fetched offsets. A future retry or scheduled send is promoted by a DB scheduler. The promotion and its outbox insert share a transaction.
 
 The [design decisions and state diagram](docs/decisions.md) explain the options, defaults and recovery boundaries.
+
+See the [standalone versus batch measurements](reports/ingress-share/README.md) to compare dispatch shares under sustained, sparse and single-lane traffic.
 
 ## Delivery contract
 

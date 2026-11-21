@@ -1,0 +1,121 @@
+{
+  "utcStart": "2026-11-20T21:17:11.096221+00:00",
+  "image": "sha256:4b7f7c2bb612b7928220f646494d24c29c3b55510cacba460d6457e41995d149",
+  "share": 20,
+  "workerReplicas": 3,
+  "concurrencyEach": 24,
+  "minimumUnclaimedEachLane": 72,
+  "profiles": {
+    "campaign10k": {
+      "single": {
+        "arrivalSpanSeconds": 3.5,
+        "observedSingleIngressPerSecond": 2.0,
+        "count": 8,
+        "queueP50Ms": 338.25,
+        "queueP95Ms": 572.39,
+        "acceptedP95Ms": 595.51,
+        "drainSeconds": 3.773,
+        "acceptedPerSecond": 2.12
+      },
+      "batch": {
+        "arrivalSpanSeconds": 0.399,
+        "observedSingleIngressPerSecond": null,
+        "count": 10000,
+        "queueP50Ms": 56608.24,
+        "queueP95Ms": 108048.65,
+        "acceptedP95Ms": 108072.29,
+        "drainSeconds": 114.379,
+        "acceptedPerSecond": 87.43
+      },
+      "marker": "9cb3cb32-726e-4f9c-9ad2-1f9cac7f9c5c",
+      "offeredSinglePerSecond": 2,
+      "providerDelta": {
+        "attempts": 10009,
+        "accepted": 10009,
+        "failures": 0,
+        "responseLost": 0,
+        "deduplicated": 0
+      },
+      "outboxTopics": {
+        "notifications.low": 10001,
+        "notifications.low.single": 8
+      },
+      "rollingSmsPeakSinceProviderStart": 96,
+      "contended": null,
+      "probes": [
+        {
+          "lane": "control",
+          "admittedAfterFirstProbeMs": 0.0,
+          "queueMs": 108288.21,
+          "acceptedMs": 108311.73,
+          "campaignOutstandingAtCreate": 9492,
+          "campaignOutstandingAtAcceptance": 19
+        },
+        {
+          "lane": "single",
+          "admittedAfterFirstProbeMs": 7.19,
+          "queueMs": 74.08,
+          "acceptedMs": 100.46,
+          "campaignOutstandingAtCreate": 9492,
+          "campaignOutstandingAtAcceptance": 9483
+        },
+        {
+          "lane": "single",
+          "admittedAfterFirstProbeMs": 507.69,
+          "queueMs": 572.39,
+          "acceptedMs": 595.51,
+          "campaignOutstandingAtCreate": 9448,
+          "campaignOutstandingAtAcceptance": 9395
+        },
+        {
+          "lane": "single",
+          "admittedAfterFirstProbeMs": 1008.51,
+          "queueMs": 466.3,
+          "acceptedMs": 490.94,
+          "campaignOutstandingAtCreate": 9404,
+          "campaignOutstandingAtAcceptance": 9361
+        },
+        {
+          "lane": "single",
+          "admittedAfterFirstProbeMs": 1506.13,
+          "queueMs": 477.5,
+          "acceptedMs": 499.56,
+          "campaignOutstandingAtCreate": 9361,
+          "campaignOutstandingAtAcceptance": 9316
+        },
+        {
+          "lane": "single",
+          "admittedAfterFirstProbeMs": 2009.15,
+          "queueMs": 424.52,
+          "acceptedMs": 448.27,
+          "campaignOutstandingAtCreate": 9316,
+          "campaignOutstandingAtAcceptance": 9277
+        },
+        {
+          "lane": "single",
+          "admittedAfterFirstProbeMs": 2509.15,
+          "queueMs": 95.29,
+          "acceptedMs": 117.77,
+          "campaignOutstandingAtCreate": 9272,
+          "campaignOutstandingAtAcceptance": 9262
+        },
+        {
+          "lane": "single",
+          "admittedAfterFirstProbeMs": 3008.04,
+          "queueMs": 338.25,
+          "acceptedMs": 360.82,
+          "campaignOutstandingAtCreate": 9228,
+          "campaignOutstandingAtAcceptance": 9197
+        },
+        {
+          "lane": "single",
+          "admittedAfterFirstProbeMs": 3507.57,
+          "queueMs": 248.24,
+          "acceptedMs": 272.13,
+          "campaignOutstandingAtCreate": 9185,
+          "campaignOutstandingAtAcceptance": 9161
+        }
+      ]
+    }
+  }
+}

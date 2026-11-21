@@ -75,7 +75,7 @@ func TestWeightedDispatch(t *testing.T) {
 				for i := range jobs {
 					jobs[i].event.Attempt = class
 				}
-				in <- batch{class: class, tasks: jobs}
+				in <- batch{route: route{class, bulkLane}, tasks: jobs}
 			}
 			var got [3]int
 			for range tc.n {
@@ -229,7 +229,7 @@ func TestKafkaRedeliveryAfterFailedBatch(t *testing.T) {
 			defer stop()
 			in := make(chan batch)
 			result := make(chan error, 1)
-			go func() { result <- consumeBatches(pollCtx, consumer, 0, in, 8) }()
+			go func() { result <- consumeBatches(pollCtx, consumer, route{}, in, &pollWindow{size: 8, cap: 8}) }()
 			read := func() []task {
 				t.Helper()
 				select {

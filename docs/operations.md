@@ -36,6 +36,17 @@ All worker replicas in a deployment must use the same database, Kafka cluster, c
 | `KAFKA_BROKERS`, `KAFKA_GROUP` | Comma-separated Kafka bootstrap servers and delivery consumer group prefix. |
 | `REDIS_ADDR` | Shared rate limiter in host:port form. |
 | `WORKER_CONCURRENCY` | Total active worker slots in one replica. Compose starts with 24. |
+| `BATCH_SHARE_PERCENT` | Batch dispatch share from 1 to 49 within a priority when both lanes have work ready on a replica. The initial default is 20. Use the same setting on all workers. |
 | `PROVIDER_URL` | Worker submission URL. Compose defaults to the local synthetic HTTP service. |
 | `PROVIDER_IDEMPOTENT`, `PROVIDER_KEY_WINDOW` | Default false, window default 24h. Enable only with a confirmed provider contract and set its actual key-retention interval. |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | Optional trace collector. The Compose tracing profile supplies Jaeger. |
+
+## Upgrading an existing deployment
+
+Provision `notifications.high.single`, `notifications.normal.single` and `notifications.low.single` with the same partition counts, retention and reader access as their batch counterparts. The Compose topics job provisions all six. Upgrade the workers before the API so every new topic has consumers when standalone traffic starts. Existing topics and group offsets continue to serve batch work. Rows created before the migration use the batch lane because their original endpoint was not recorded.
+
+To roll back, switch the API back first. Keep the new workers until the single topics have drained and all stored single jobs, including scheduled work and retries, are terminal. Independent analytics consumers that need all notifications should subscribe to both sets of topics.
+
+The percentage counts dispatch turns within each priority on a worker. If a Kafka poll shows that another record is waiting behind the current poll, the scheduler holds that lane's next turn for up to two seconds while its reader commits and refills. Other priorities can use free workers during this interval. A lane that has waited 30 seconds locally can take the next available turn for its priority ahead of its usual share. Work already waiting for a Redis permit or being sent completes under the same channel quota.
+
+Kafka lag, partition assignment and outstanding sends affect the share of send claims observed across the deployment. Inspect both consumer groups for a priority, for example `delivery.low` and `delivery.low.single`.
