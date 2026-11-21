@@ -21,6 +21,7 @@ import (
 const DefaultBatchSharePercent = 20
 
 type Config struct {
+	ChannelReaders    bool
 	BatchSharePercent int
 	Brokers           []string
 	Group             string
@@ -40,6 +41,7 @@ var errFutureGeneration = errors.New("ready event is ahead of the committed noti
 
 var validID = regexp.MustCompile("(?i)^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 
+var channels = [...]string{"sms", "email", "push"}
 var priorities = [...]string{"high", "normal", "low"}
 var weighted = [...]int{0, 0, 0, 0, 0, 0, 1, 1, 1, 2}
 
@@ -102,6 +104,34 @@ func pollLimit(workers, class int) int {
 	return places * min(workers, 24)
 }
 
+// Source zero is the original reader for this lane. Indices one through
+// three are batch-only, one per channel. All feed the same scheduler and pool.
+type reader struct {
+	route
+	source int
+}
+
+func (r reader) suffix() string {
+	if r.source == 0 {
+		return r.route.suffix()
+	}
+	return priorities[r.class] + ".batch." + channels[r.source-1]
+}
+
+func (r reader) window(workers, batchPercent int) pollWindow {
+	if r.source == 0 {
+		return r.route.window(workers, batchPercent)
+	}
+	// Divide the original batch poll budget across the three independent
+	// readers. A reader must be able to request at least one record.
+	capacity := pollLimit(workers, r.class)
+	base := capacity / len(channels)
+	if r.source <= capacity%len(channels) {
+		base++
+	}
+	return newWindow(max(1, base), batchPercent)
+}
+
 type pollWindow struct {
 	size int
 	cap  int
@@ -113,6 +143,10 @@ func (r route) window(workers, batchPercent int) pollWindow {
 	if r.lane == singleLane {
 		share = 100 - share
 	}
+	return newWindow(capacity, share)
+}
+
+func newWindow(capacity, share int) pollWindow {
 	return pollWindow{size: max(1, capacity*share/100), cap: capacity}
 }
 
@@ -129,10 +163,11 @@ func (w *pollWindow) observe(records int, elapsed time.Duration) {
 }
 
 type task struct {
-	admitBy time.Time
-	event   event
-	record  *kgo.Record
-	result  chan<- outcome
+	refillSource int // source + 1 if this task drains a poll with known backlog
+	admitBy      time.Time
+	event        event
+	record       *kgo.Record
+	result       chan<- outcome
 }
 type outcome struct {
 	record *kgo.Record
@@ -141,8 +176,9 @@ type outcome struct {
 
 type batch struct {
 	route
-	tasks []task
-	more  bool
+	source int
+	tasks  []task
+	more   bool
 }
 
 const (
@@ -153,10 +189,18 @@ const (
 
 type priorityQueue struct {
 	lanes       [2][]task
-	more        [2]bool
-	refillUntil [2]time.Time
+	refillUntil [2][1 + len(channels)]time.Time
 	lastServed  [2]time.Time
 	batchCredit int
+}
+
+func (q *priorityQueue) refilling(lane ingressLane, now time.Time) bool {
+	for _, until := range q.refillUntil[lane] {
+		if until.After(now) {
+			return true
+		}
+	}
+	return false
 }
 
 func (q *priorityQueue) agingAt(lane ingressLane) time.Time {
@@ -175,10 +219,10 @@ func (q *priorityQueue) agingAt(lane ingressLane) time.Time {
 // worker. Credit advances only when an actual task leaves this priority.
 func (q *priorityQueue) next(batchPercent int, now time.Time) (lane ingressLane, nextCredit int, ready bool) {
 	singleReady, bulkReady := len(q.lanes[singleLane]) != 0, len(q.lanes[bulkLane]) != 0
-	if !singleReady && !q.refillUntil[singleLane].After(now) {
+	if !singleReady && !q.refilling(singleLane, now) {
 		return bulkLane, 0, bulkReady
 	}
-	if !bulkReady && !q.refillUntil[bulkLane].After(now) {
+	if !bulkReady && !q.refilling(bulkLane, now) {
 		return singleLane, 0, singleReady
 	}
 	if singleReady && bulkReady {
@@ -201,22 +245,25 @@ func (q *priorityQueue) next(batchPercent int, now time.Time) (lane ingressLane,
 }
 
 func (q *priorityQueue) enqueue(b batch) {
+	if b.more && len(b.tasks) > 0 {
+		b.tasks[len(b.tasks)-1].refillSource = b.source + 1
+	}
 	q.lanes[b.lane] = append(q.lanes[b.lane], b.tasks...)
-	q.more[b.lane] = b.more
-	q.refillUntil[b.lane] = time.Time{}
+	q.refillUntil[b.lane][b.source] = time.Time{}
 }
 
 func (q *priorityQueue) dispatched(lane ingressLane, credit int, now time.Time) {
 	jobs := q.lanes[lane]
+	refill := jobs[0].refillSource
 	jobs[0] = task{}
 	q.lanes[lane] = jobs[1:]
 	q.lastServed[lane] = now
 	q.batchCredit = credit
-	if len(jobs) == 1 && q.more[lane] {
+	if refill > 0 {
 		// The broker reports more offsets behind this poll. Give its reader
 		// time to finish outstanding sends, commit, and refill. A disconnected
 		// reader cannot hold its sibling past the grace interval.
-		q.refillUntil[lane] = now.Add(refillGrace)
+		q.refillUntil[lane][refill-1] = now.Add(refillGrace)
 	}
 }
 
@@ -251,7 +298,9 @@ func (s *scheduler) prepare(now time.Time) time.Time {
 				consider(jobs[0].admitBy)
 				consider(q.agingAt(lane))
 			}
-			consider(q.refillUntil[lane])
+			for _, until := range q.refillUntil[lane] {
+				consider(until)
+			}
 		}
 	}
 	return wake
@@ -342,7 +391,12 @@ func Run(ctx context.Context, cfg Config, store Store, sender Sender) error {
 	}
 	for p := range priorities {
 		for _, lane := range [...]ingressLane{bulkLane, singleLane} {
-			group.Go(func() error { return consume(ctx, cfg, route{p, lane}, input) })
+			group.Go(func() error { return consume(ctx, cfg, reader{route: route{p, lane}}, input) })
+		}
+		if cfg.ChannelReaders {
+			for ch := range channels {
+				group.Go(func() error { return consume(ctx, cfg, reader{route{p, bulkLane}, ch + 1}, input) })
+			}
 		}
 	}
 	return group.Wait()
@@ -377,7 +431,7 @@ func process(ctx context.Context, store Store, sender Sender, limit limiter, e e
 	return err
 }
 
-func consume(ctx context.Context, cfg Config, r route, in chan<- batch) error {
+func consume(ctx context.Context, cfg Config, r reader, in chan<- batch) error {
 	topic := "notifications." + r.suffix()
 	window := r.window(cfg.Workers, cfg.BatchSharePercent)
 	for ctx.Err() == nil {
@@ -402,7 +456,7 @@ func consume(ctx context.Context, cfg Config, r route, in chan<- batch) error {
 	return nil
 }
 
-func consumeBatches(ctx context.Context, client *kgo.Client, r route, in chan<- batch, window *pollWindow) error {
+func consumeBatches(ctx context.Context, client *kgo.Client, r reader, in chan<- batch, window *pollWindow) error {
 	for {
 		fetches := client.PollRecords(ctx, window.size)
 		if errs := fetches.Errors(); len(errs) > 0 {
@@ -437,12 +491,12 @@ func consumeBatches(ctx context.Context, client *kgo.Client, r route, in chan<- 
 
 // Bound time spent holding a group generation. Stop new dispatch admissions
 // early enough to finish the bounded provider call before the commit deadline.
-func processBatch(parent context.Context, client *kgo.Client, source route, in chan<- batch, records []*kgo.Record, more bool) error {
+func processBatch(parent context.Context, client *kgo.Client, source reader, in chan<- batch, records []*kgo.Record, more bool) error {
 	deadline := time.Now().Add(batchBudget)
 	ctx, cancel := context.WithDeadline(parent, deadline)
 	defer cancel()
 	results := make(chan outcome, len(records))
-	b := batch{route: source, more: more}
+	b := batch{route: source.route, source: source.source, more: more}
 	for _, r := range records {
 		e, err := decode(r.Value)
 		if err != nil {
