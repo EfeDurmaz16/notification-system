@@ -108,6 +108,8 @@ func TestReceiptsAndEndpointEvidence(t *testing.T) {
 		{"message ID alone", provider, 201, `{"messageId":"id"}`, true, accepted, "provider_accepted"},
 		{"full HTTP 200 receipt", provider, 200, `{"messageId":"id","status":"accepted","timestamp":"2026-01-01T00:00:00Z"}`, true, accepted, "provider_accepted"},
 		{"optional timestamp", provider, 202, `{"messageId":"id","status":"accepted","timestamp":"ISO8601"}`, true, accepted, "provider_accepted"},
+		{"invalid ID in assessment receipt", capture, 202, `{"messageId":"a\u0000b","status":"accepted","timestamp":"2026-01-01T00:00:00Z"}`, false, unknown, "malformed_ack"},
+		{"invalid ID in message ID receipt", provider, 200, `{"messageId":"a\u0000b"}`, true, unknown, "malformed_ack"},
 		{"empty ID", provider, 200, `{"messageId":"  "}`, true, unknown, "malformed_ack"},
 		{"contradictory status", provider, 201, `{"messageId":"id","status":"rejected"}`, true, unknown, "malformed_ack"},
 		{"null status", provider, 200, `{"messageId":"id","status":null}`, true, unknown, "malformed_ack"},

@@ -308,7 +308,7 @@ func readReceipt(resp *http.Response, messageIDReceipt bool) result {
 		Status    json.RawMessage `json:"status"`
 		Timestamp json.RawMessage `json:"timestamp"`
 	}
-	if json.Unmarshal(body, &ack) != nil || strings.TrimSpace(ack.MessageID) == "" {
+	if json.Unmarshal(body, &ack) != nil || strings.TrimSpace(ack.MessageID) == "" || strings.ContainsRune(ack.MessageID, 0) {
 		return invalid
 	}
 	if !messageIDReceipt || ack.Status != nil {
