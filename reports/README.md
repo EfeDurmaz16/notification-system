@@ -6,7 +6,7 @@ The release candidate was exercised with a real PostgreSQL, Kafka, Debezium and 
 |---|---|
 | Does a successful cancellation prevent a provider POST? | [Initial red and green tests](tdd/README.md), [PostgreSQL concurrent claims](store/postgres-integration.txt), [live Compose smoke](ci/compose-smoke.txt) |
 | What did we actually observe under load? | [Before/after priority experiment](bench/comparison.md), [release candidate measurements](bench/tuned/summary.md), [per-ID audit on 10,000 messages](bench/tuned/burst-10000.json), [reference measurements before priority tuning](bench/final/summary.md) |
-| What do SMS, email and push report when they run together for 15 minutes with known errors? | [Live rates, provider counts and per-channel latency](sustained-mixed/README.md) |
+| What do SMS, email and push report when they run together for 15 minutes with known errors? | [v1.1.0 channel-reader run and release build provenance](https://github.com/EfeDurmaz16/notification-system/releases/download/v1.1.0/notification-system-verification-report.md), [earlier shared-reader experiment](sustained-mixed/README.md) |
 | What does scraping all metrics cost after a simulated day of retained notifications? | [Database volume experiment](volume-simulation/README.md) |
 | How quickly does a standalone SMS pass a campaign at the same priority, and how fast does the batch progress? | [Ingress share measurements and reproduction](ingress-share/README.md) |
 | What happens to individual sends when one worker dies with both queues backlogged? | [Partition ownership, provider POSTs and per-ID status history](worker-rebalance/README.md) |

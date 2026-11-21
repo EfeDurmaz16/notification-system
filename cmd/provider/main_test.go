@@ -40,7 +40,7 @@ func TestIdempotencyAndUnknown(t *testing.T) {
 		if err != nil {
 			return receipt{}, err
 		}
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 		var r receipt
 		err = json.NewDecoder(resp.Body).Decode(&r)
 		return r, err
@@ -60,7 +60,7 @@ func TestIdempotencyAndUnknown(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	body, _ := io.ReadAll(resp.Body)
 	if strings.TrimSpace(string(body)) != `{"attempts":3}` {
 		t.Fatalf("expected three independent attempts: %s", body)

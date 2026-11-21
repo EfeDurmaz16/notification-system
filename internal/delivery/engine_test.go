@@ -77,8 +77,8 @@ func (s *gateStore) Start(context.Context, string, int) (bool, error) {
 	return s.state.CompareAndSwap("pending", "sending"), nil
 }
 
-func (s *gateStore) Finish(_ context.Context, _ string, _ int, state, _ string, _ time.Time) error {
-	s.state.Store(state)
+func (s *gateStore) Finish(_ context.Context, _ string, _ int, out Outcome) error {
+	s.state.Store(out.State)
 	return nil
 }
 

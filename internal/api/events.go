@@ -7,6 +7,22 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+// Reserve capacity before the initial database lookup or protocol upgrade.
+// Disconnected clients release their place and can reconnect by notification ID.
+func limitSubscriptions(limit int, next http.HandlerFunc) http.HandlerFunc {
+	active := make(chan struct{}, limit)
+	return func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case active <- struct{}{}:
+			defer func() { <-active }()
+			next(w, r)
+		default:
+			w.Header().Set("Retry-After", "1")
+			problem(w, http.StatusServiceUnavailable, "status subscriptions at capacity")
+		}
+	}
+}
+
 func (s server) events(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	n, err := s.repo.Get(r.Context(), id)
@@ -21,7 +37,10 @@ func (s server) events(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	defer c.Close()
+	if logWriter, ok := w.(*accessWriter); ok {
+		logWriter.status = http.StatusSwitchingProtocols
+	}
+	defer func() { _ = c.Close() }()
 	done := make(chan struct{})
 	c.SetReadLimit(256)
 	_ = c.SetReadDeadline(time.Now().Add(40 * time.Second))

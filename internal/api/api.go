@@ -45,7 +45,7 @@ func New(repo Repository) http.Handler {
 	mux.HandleFunc("GET /v1/notifications/{id}", withID(s.get))
 	mux.HandleFunc("GET /v1/batches/{id}", withID(s.batch))
 	mux.HandleFunc("POST /v1/notifications/{id}/cancel", withID(s.cancel))
-	mux.HandleFunc("GET /v1/notifications/{id}/events", withID(s.events))
+	mux.HandleFunc("GET /v1/notifications/{id}/events", withID(limitSubscriptions(32, s.events)))
 	mux.HandleFunc("GET /metrics", s.metrics)
 	mux.HandleFunc("GET /healthz", s.health)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -57,8 +57,10 @@ func New(repo Repository) http.Handler {
 			correlation = hex.EncodeToString(id[:])
 		}
 		w.Header().Set("X-Correlation-ID", correlation)
-		mux.ServeHTTP(w, r)
-		slog.InfoContext(r.Context(), "http request", "correlation_id", correlation, "trace_id", observability.TraceID(r.Context()), "method", r.Method, "route", r.Pattern, "duration_ms", time.Since(start).Milliseconds())
+		r = r.WithContext(observability.WithCorrelationID(r.Context(), correlation))
+		response := &accessWriter{ResponseWriter: w, status: http.StatusOK}
+		mux.ServeHTTP(response, r)
+		slog.InfoContext(r.Context(), "http request", "correlation_id", correlation, "trace_id", observability.TraceID(r.Context()), "method", r.Method, "route", r.Pattern, "status", response.status, "duration_ms", time.Since(start).Milliseconds())
 	})
 }
 
@@ -233,7 +235,7 @@ func (s server) list(w http.ResponseWriter, r *http.Request) {
 	f := store.Filter{Channel: q.Get("channel"), Status: q.Get("status"), Limit: 50}
 	for name := range q {
 		switch name {
-		case "status", "channel", "from", "to", "limit", "offset":
+		case "status", "channel", "from", "to", "limit", "offset", "cursor":
 		default:
 			problem(w, 400, "unknown query parameter")
 			return
@@ -275,6 +277,15 @@ func (s server) list(w http.ResponseWriter, r *http.Request) {
 		problem(w, 400, "from must precede to")
 		return
 	}
+	if q.Has("cursor") {
+		f.Before = decodeListCursor(q.Get("cursor"))
+		if f.Before == nil || q.Has("offset") {
+			problem(w, 400, "supply a valid cursor without offset")
+			return
+		}
+	}
+	pageSize := f.Limit
+	f.Limit++ // One extra row tells the caller whether there is another page.
 	items, err := s.repo.List(r.Context(), f)
 	if err != nil {
 		repositoryError(w, err)
@@ -283,11 +294,17 @@ func (s server) list(w http.ResponseWriter, r *http.Request) {
 	if items == nil {
 		items = []store.Notification{}
 	}
+	var nextCursor string
+	if len(items) > pageSize {
+		items = items[:pageSize]
+		nextCursor = encodeListCursor(items[pageSize-1])
+	}
 	writeJSON(w, 200, struct {
-		Items  []store.Notification `json:"items"`
-		Limit  int                  `json:"limit"`
-		Offset int                  `json:"offset"`
-	}{items, f.Limit, f.Offset})
+		Items      []store.Notification `json:"items"`
+		Limit      int                  `json:"limit"`
+		Offset     int                  `json:"offset"`
+		NextCursor string               `json:"nextCursor,omitempty"`
+	}{items, pageSize, f.Offset, nextCursor})
 }
 
 func knownStatus(s string) bool {
@@ -328,5 +345,5 @@ func (s server) metrics(w http.ResponseWriter, r *http.Request) {
 	}
 	writeOutcomeMetrics(&out, m)
 	w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
-	io.WriteString(w, out.String())
+	_, _ = io.WriteString(w, out.String())
 }

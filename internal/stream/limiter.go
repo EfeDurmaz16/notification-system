@@ -13,6 +13,10 @@ import (
 // window only at admission would let delayed claims bunch up at the provider.
 // The 2 minute crash lease is longer than the 30 second send deadline.
 var reserve = redis.NewScript(`
+local pause = redis.call("PTTL", KEYS[3])
+if pause > 0 then
+  return pause * 1000
+end
 local t = redis.call("TIME")
 local now = tonumber(t[1]) * 1000000 + tonumber(t[2])
 redis.call("ZREMRANGEBYSCORE", KEYS[1], "-inf", now)
@@ -47,21 +51,19 @@ type slot struct {
 	token string
 }
 
-func (l limiter) acquire(ctx context.Context, channel string) (slot, error) {
+// tryAcquire asks Redis once. A positive delay parks only this channel in
+// the scheduler, so waiting for its quota occupies no delivery handler.
+func (l limiter) tryAcquire(ctx context.Context, channel string) (slot, time.Duration, error) {
 	lease := slot{key: l.prefix + "{" + channel + "}", token: rand.Text()}
-	for {
-		wait, err := reserve.Run(ctx, l.client, []string{lease.key, lease.key + ":next"}, lease.token).Int64()
-		if err != nil {
-			return slot{}, fmt.Errorf("reserve %s quota: %w", channel, err)
-		}
-		if wait == 0 {
-			return lease, nil
-		}
-		// A previously active permit can be released before its crash lease.
-		if err := sleep(ctx, min(time.Duration(wait)*time.Microsecond, 100*time.Millisecond)); err != nil {
-			return slot{}, err
-		}
+	wait, err := reserve.Run(ctx, l.client, []string{lease.key, lease.key + ":next", lease.key + ":pause"}, lease.token).Int64()
+	if err != nil {
+		return slot{}, 0, fmt.Errorf("reserve %s quota: %w", channel, err)
 	}
+	if wait > 0 {
+		// An active permit can be released before its crash lease expires.
+		return slot{}, min(time.Duration(wait)*time.Microsecond, 100*time.Millisecond), nil
+	}
+	return lease, 0, nil
 }
 
 func (l limiter) release(ctx context.Context, lease slot) error {

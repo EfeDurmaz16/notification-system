@@ -11,6 +11,7 @@
   "publication.name": "notify_outbox_pub",
   "publication.autocreate.mode": "filtered",
   "table.include.list": "public.outbox",
+  "tombstones.on.delete": "false",
   "snapshot.mode": "initial",
   "poll.interval.ms": "100",
   "transforms": "outbox",

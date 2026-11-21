@@ -1,112 +1,89 @@
 # Event-driven notification service
 
-A Go service for accepting SMS, email and push notifications and submitting them to an HTTP provider. Clients can create up to 1,000 items in a request, follow progress, and cancel a notification until its first send starts. PostgreSQL records the accepted work. Kafka distributes ready events. A Redis limiter coordinates delivery attempts across worker replicas.
+Submit SMS, email or push notifications, individually or in batches of up to 1,000. The API records work in PostgreSQL before replying. Workers deliver it asynchronously and share a rolling limit of 100 provider attempts per second per channel.
 
-## Run locally
+## Run one notification
 
-Install Docker with Compose v2 or later. From the repository root:
-
-```sh
-docker compose up --build -d
-curl http://127.0.0.1:8080/healthz
-docker compose ps -a
-```
-
-If port 8080 is occupied, prefix Compose commands with `API_PORT=18080` and use `http://127.0.0.1:18080` for the API. For make targets also set `API_URL=http://127.0.0.1:18080`.
-
-A fresh Compose installation uses per-channel batch readers. Each priority has a separate batch topic for SMS, email and push, feeding the same worker pool. Existing installations can [roll out or roll back the routing change](docs/channel-batch-routing.md) while preserving committed work.
-
-The first run downloads the service images, applies versioned SQL migrations, creates Kafka topics, and registers the PostgreSQL CDC connector. Wait for the API health check and the connector-init job to finish before measuring delivery. The default provider is a local simulator. The development ports bind to loopback. Go 1.26.4 is used for host-side builds and tests.
+From a fresh checkout, start Docker Compose v2 and send a synthetic SMS to the bundled simulator. The first start downloads the images and registers the CDC connector.
 
 ```sh
-curl -sS http://127.0.0.1:8080/v1/notifications \
-  -H 'Content-Type: application/json' \
-  -H 'Idempotency-Key: example-001' \
+docker compose up --build -d --wait
+api=http://127.0.0.1:8080
+curl -fsS "$api/v1/notifications" -H 'Content-Type: application/json' \
+  -H 'Idempotency-Key: first-demo' \
   -d '{"channel":"sms","recipient":"+12025550123","content":"Your order is ready","priority":"high"}'
 ```
 
-A successful create returns HTTP 202 with an ID and batch ID. Poll `GET /v1/notifications/{id}`, or connect a WebSocket to `/v1/notifications/{id}/events`. The provider's subsequent 202 records `accepted`: the provider accepted the submission. Recipient receipts require an additional provider contract.
+Copy the returned `id` into the command below. The create response (`202`) confirms that the API saved the notification. Once the provider acknowledges it, the query returns `"status":"accepted"` and its `messageId`. A recipient delivery receipt would require a separate provider signal.
 
-See [OpenAPI](openapi.yaml) for the full HTTP contract and [API examples](docs/api-examples.md) for batches, scheduling, templates and reconnects. [Webhook.site setup and verification](docs/webhook-site.md) uses a disposable endpoint and one synthetic message. Run load experiments only with the local simulator.
+```sh
+curl -fsS "$api/v1/notifications/<id>"
+```
+
+To exercise the **external provider in the assessment**, run `scripts/webhook-smoke.sh`. It starts an isolated Compose project, configures a disposable Webhook.site endpoint, sends one synthetic email and checks both the persisted receipt and captured POST. [Manual configuration and example acknowledgement](docs/webhook-site.md)
+
+## Review the implementation
+
+| Question | Where to look |
+| --- | --- |
+| Which requirements and bonuses are covered? | [Assessment checklist](reports/assessment-requirements.md), [API examples](docs/api-examples.md), [OpenAPI](openapi.yaml) |
+| Why this queue and delivery policy? | [Decisions and state diagram](docs/decisions.md), [measured alternatives and contributions](docs/decision-history.md) |
+| Does it keep processing batch work during interactive traffic? | [Standalone versus batch](reports/ingress-share/README.md), [SMS and push reader comparison](reports/channel-readers/README.md) |
+| What happened when a worker died? | [Graceful exit](reports/worker-drain/README.md), [hard stop with a per-ID audit](reports/channel-cutover/rebalance/README.md) |
+| Which version ran the 108,000-ID test? | [v1.1.0 report and build provenance](https://github.com/EfeDurmaz16/notification-system/releases/download/v1.1.0/notification-system-verification-report.md), [raw evidence archive](https://github.com/EfeDurmaz16/notification-system/releases/tag/v1.1.0) |
+
+In that 15-minute **v1.1.0** run (`fa3042f`, independent SMS, email and push batch readers), the local simulator recorded one POST per ID. Each channel received 36,000 notifications: 35,640 acknowledgements, 180 deliberate rejections and 180 deliberately lost responses.
 
 ## Delivery path
 
 ```mermaid
 flowchart LR
     C[Client] --> A[Go API]
-    A --> P[(PostgreSQL)]
+    A -->|Notification and outbox in one commit| P[(PostgreSQL)]
     P -->|Outbox inserts via WAL| D[Debezium]
-    D --> K[Standalone and channel batch topics per priority]
+    D --> K[Kafka topics by priority and request type]
     K --> W[Delivery workers]
-    W -->|Reserve channel slot| R[(Redis)]
-    W -->|Conditional send claim| P
+    W -->|Reserve channel quota| R[(Redis)]
+    W -->|Claim pending attempt| P
     W --> H[HTTP provider]
     W -->|Record outcome| P
-    S[Due job scheduler] -->|Promote and emit in one transaction| P
+    S[Worker scheduler] -->|Publish due work through outbox| P
 ```
 
-1. Create validates each item, expands templates and fingerprints the request. A transaction stores the batch replay response, immutable accepted payloads and ready outbox events. Invalid items get indexed errors. A repeated key and matching payload returns the original IDs. A conflicting valid payload gets HTTP 409.
-2. Debezium routes ready events to a standalone topic per priority or a batch topic per priority and channel. Workers also consume existing shared batch topics during upgrades. The create endpoint sets the lane, including for one-item batches. PostgreSQL preserves it for scheduled deliveries and retries. Consumers load the notification by ID and attempt generation.
-3. The shared worker pool chooses a priority with weights 6:3:1 for high, normal and low. Within each priority, standalone requests get more turns. Batch requests continue to receive turns during sustained standalone traffic. Either lane can take all available turns when the other is empty. Both share the channel's Redis quota.
-4. A worker changes the matching pending generation to sending in PostgreSQL before making a POST. A successful cancellation prevents that transition. Even if Kafka replays a ready event, the DB predicate fences workers from consuming the same send right.
-5. The worker stores the outcome before the consumer commits the fetched offsets. A future retry or scheduled send is promoted by a DB scheduler. The promotion and its outbox insert share a transaction.
+- **Admission.** A required `Idempotency-Key` identifies each create request. Repeating the same key and body returns the original IDs. Batch admission returns indexed errors for invalid items. Both the 1,000-item maximum and the 5 MiB request-body limit apply.
+- **Dispatch.** PostgreSQL keeps the payload. Kafka distributes ready IDs. A shared worker pool selects high, normal and low priority in a 6:3:1 ratio when all are ready. Within a priority, batches receive a default 20% share while standalone traffic is waiting. Independent batch readers keep an email or push batch from sitting behind an SMS campaign on the same Kafka partition.
+- **Cancellation.** A notification can be cancelled while waiting for quota. Cancellation and the first send compete for the same PostgreSQL row. Once the worker changes it to `sending`, cancellation closes. A replay cannot claim the same attempt twice.
+- **Retries.** The local simulator declines a throttled POST before accepting the notification. Its `429` triggers a retry after at least `Retry-After`. The default budget is six total attempts with exponential backoff and jitter starting from two seconds. For an external provider, enable `PROVIDER_429_NOT_ACCEPTED=true` only if its contract guarantees this behavior. A gateway `503` with `Retry-After` leaves a non-idempotent submission `unknown`. [Retry policy](docs/decisions.md#implementation-choices-for-this-assessment)
+- **Receipts and diagnosis.** The assessment's Webhook.site contract uses HTTP 202 with a message ID, accepted status and a formatted timestamp. An empty 200, an ID alone or the literal placeholder `ISO8601` provides insufficient evidence for that contract. The status API exposes the recorded reason and provider HTTP code. Use the create request's `X-Correlation-ID` to find its structured API and worker logs. [Example receipt](docs/webhook-site.md) · [Operator guide](docs/operations.md)
 
-The [design decisions and state diagram](docs/decisions.md) explain the options, defaults and recovery boundaries.
+## API and verification
 
-See the [standalone versus batch measurements](reports/ingress-share/README.md) to compare dispatch shares under sustained, sparse and single-lane traffic.
-
-## Delivery contract
-
-| Outcome | Worker action |
-|---|---|
-| Confirmed dial failure before a request was sent | Schedule bounded exponential backoff with jitter. Four attempts including the first. |
-| Valid provider 202 with message ID, accepted status and timestamp | Store provider acceptance and message ID. |
-| Explicit permanent rejection, such as an invalid recipient (400) | Mark failed. |
-| Lost response, malformed acknowledgment, or ambiguous error | Record unknown for a webhook-style provider. Investigate by notification ID before deciding whether to send a new notification. |
-| Provider explicitly guarantees idempotency | Reuse the notification ID as the provider key. A bounded retry must fit inside the configured key-retention window. |
-| Worker receives SIGTERM during scale-down | Stop taking new work. Finish provider attempts already claimed in PostgreSQL within their original deadline, persist the outcome, and let another worker pick up uncommitted records. |
-| Worker disappears while sending | Recover stale sends after two minutes. A webhook-style provider leaves the outcome unknown; an idempotent provider may retry within its remaining attempt and time budget. |
-
-The client create key identifies API intent. The provider key identifies a single notification across attempts. The rate limiter tracks each attempt separately. Cancellation succeeds only before the first send right is acquired. The first-stage TDD transcripts are in [reports/tdd](reports/tdd).
-
-## Verification and packaging
-
-The [design decision history](docs/decision-history.md) records the options, candidate contributions, measurements and reasons for changing course. The [assessment checklist](reports/assessment-requirements.md) links each requirement to implementation or observed evidence. The [channel-reader comparison](reports/channel-readers/README.md) explains the batch latency and throughput trade-off behind the release configuration.
-
-In a [15-minute run across all three channels](reports/sustained-mixed/README.md), the API admitted 36,000 notifications per channel. Each channel recorded 35,640 provider acknowledgements, 180 deliberate rejections and 180 lost responses. An independent check found exactly one provider POST for each of the 108,000 IDs. The [restart and recovery tests](reports/final-recovery/README.md) exercise cases where a retry is required.
-
-| Command | Scope |
-|---|---|
-| `make verify-all` | Full local suite including benchmarks, load matrix and isolated fault tests. [Verification guide](docs/verification.md) |
-| `make check` | Formatting, vet, unit tests, race detector, binary build |
-| `make ci` | Local checks, Compose, database integration tests and end-to-end smoke |
-| `make burst`, `make load`, `make stress`, `make failures` | Independent local traffic and failure experiments |
-| `make performance` | Repeated isolated Go benchmarks and allocation counts |
-| `make package` | Source archive, native executables and SHA-256 checksums for the current commit |
-| `docker compose up -d --scale worker=3` | Exercise the same channel budget with three workers |
-| `docker compose down` | Stop the stack and retain data volumes |
-
-[Verification results and review guide](reports/README.md) include measurements of this implementation, the environment and the exact scope of each run. Run the complete replica and workload comparison with `scripts/bench.sh` against an isolated, idle stack. It temporarily scales workers and resets the local simulator counters. See [failure investigation](docs/operations.md) for manual inspection. The CI workflow runs on GitHub. The release workflow can build a versioned container image and publish packages on a version tag.
-
-## Observability and operating assumptions
-
-The [historical outcome report](docs/outcome-report.md) groups recorded SMS, email and push outcomes by UTC hour, day or week.
-
-- `/metrics` exposes each channel's average accepted, failed and unknown notifications per second over the last five minutes. It also reports logical pending depth, oldest pending age, state counts, terminal outcome counters and an acceptance latency histogram. `/healthz` checks API database readiness. Worker and connector health are separate from admission readiness.
-- JSON logs link requests and worker outcomes to identifiers. [Distributed tracing](docs/tracing.md) shows the API, worker and provider boundary with W3C propagation and optional OTLP export.
-- The notification row is authoritative. WebSocket subscribers receive current snapshots, may skip intermediate states, and can refetch the resource after reconnecting.
-- The simulator and single-node PostgreSQL, Kafka and Redis volumes model process restarts on a development host. Production HA, authenticated tenants, retention and provider receipts require deployment-specific configuration. The API uses one trusted client namespace. Keep the default bindings on loopback.
-- Retain outbox rows, notification history, and replay keys for the assessment. Capacity planning must account for these tables and WAL growth during outages. Terminal failed and unknown items remain queryable by status. Malformed stream envelopes are quarantined separately.
-
-## Further improvements
-
-1. **Test recovery with a real provider.** The Webhook.site fixture can show that a POST arrived. For the first production integration, test two cases against the provider's contract: a 429 with a retry delay, and a lost acknowledgement after acceptance. Check the idempotency window and whether the original notification ID can retrieve an authoritative receipt before enabling automatic retries or reconciliation. [Current recovery policy](docs/decision-history.md#what-can-a-replacement-worker-learn-after-a-lost-acknowledgement)
-2. **Reduce the cost of scraping metrics as history grows.** With 2.16 million older notifications and no active writers, a full scrape took 444 ms at the median. The all-time latency histogram scanned historical rows on every scrape. Benchmark precomputed histogram buckets under concurrent sends and verify that counts still match the underlying rows. [Measurements and query plans](reports/volume-simulation/README.md)
-
-### Scenarios worth revisiting
-
-| Scenario | First change to evaluate |
+| Operation | Endpoint |
 | --- | --- |
-| The service must run a campaign for 50,000 eligible recipients | The caller currently supplies the recipients, up to 1,000 per request. Add a campaign ID, consent checks and durable progress so an interrupted campaign resumes with the remaining recipients. [Batch contract and burst test](reports/assessment-requirements.md) |
-| Two independent customers use the same create key | Authenticate callers, scope reads and cancellation to the owner, and enforce uniqueness on `(tenant_id, idempotency_key)`. Each customer can then retry their own request safely. |
-| A slow SMS provider ties up workers while push is ready | Independent readers already reduced batch push p95 from 43 s to 187 ms in one matched trial. If delays now occur after the Kafka read, measure slot occupancy and test a per-channel concurrency limit before splitting the pool. [Both matched trials and SMS cost](reports/channel-readers/README.md) |
+| Create one / create a batch | `POST /v1/notifications` / `POST /v1/batches` |
+| Read one / read a batch | `GET /v1/notifications/{id}` / `GET /v1/batches/{id}` |
+| List, filter and paginate | `GET /v1/notifications` |
+| Cancel pending / watch snapshots | `POST /v1/notifications/{id}/cancel` / `WS /v1/notifications/{id}/events` |
+| API database readiness / operational metrics | `GET /healthz` / `GET /metrics` |
+
+| Command | What it exercises |
+| --- | --- |
+| `make test` | Unit tests. Service-dependent tests skip when their dependencies are absent. |
+| `make ci` | Lint, vulnerability scan, unit and race tests, builds, live OpenAPI checks and Docker-backed integration |
+| `make verify-all` | Local CI, benchmarks, load matrix, worker shutdown and dependency interruptions |
+| `make performance`, `make load`, `make stress`, `make burst` | Isolated Go benchmarks or individual traffic profiles |
+| `make sustained-mixed` | 15-minute SMS, email and push workload, with a per-ID audit |
+| `make package` | Source archive, native executables and checksums for the current commit |
+
+For a port conflict, set `API_PORT=18080` before starting Compose and use `http://127.0.0.1:18080`. `docker compose down` stops the stack and retains its data. The [verification guide](docs/verification.md) lists host prerequisites, timings and result files. The [operations guide](docs/operations.md) covers queues, investigation by ID and ambiguous outcomes. [Tracing](docs/tracing.md) and the [historical outcome report](docs/outcome-report.md) cover cross-service diagnosis and UTC reporting.
+
+I chose the delivery guarantees and scheduling policy. I used a coding assistant to implement those decisions and run the experiments. The [decision history](docs/decision-history.md) records which measurements changed my choices.
+
+## Operating limits and further improvements
+
+| Current boundary | Next change and evidence needed |
+| --- | --- |
+| Webhook.site simulates HTTP acceptance. Production providers differ on rate limits, idempotency windows and receipts. | Test a lost acknowledgement and a documented throttle response against the actual provider. Identify a stable reference for lookup before enabling automatic reconciliation. |
+| Compose runs a single PostgreSQL, Kafka and Redis node. Replay keys are retained. Cleanup of history and published outbox events is opt-in. | Choose [retention windows and a cleanup schedule](docs/persistence.md), then validate failover and disk use under sustained writes. A seeded 2.16-million-row database took 444 ms per median metrics scrape in the [original volume experiment](reports/volume-simulation/README.md). |
+| The caller supplies recipients in a single trusted namespace. | For multi-tenant traffic, authenticate and scope keys and reads by tenant. For audience selection, add campaign progress and consent checks. |
+| Batch channels have independent readers. Standalone channels share a topic per priority, so an SMS backlog can delay email before dispatch. | Compare channel-specific standalone readers under a mixed backlog, then measure the cost in idle readers and rebalance time. [Routing measurements and rollback](docs/channel-batch-routing.md) |

@@ -10,6 +10,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/EfeDurmaz16/notification-system/internal/delivery"
+	"github.com/EfeDurmaz16/notification-system/internal/observability"
 )
 
 // Each test owns a unique schema. The supplied database and all other schemas
@@ -192,7 +195,7 @@ func TestReadyEventsKeepIngress(t *testing.T) {
 				if ok, err := s.Start(ctx, id, 1); err != nil || !ok {
 					t.Fatalf("claim = %v, %v", ok, err)
 				}
-				if err := s.Finish(ctx, id, 1, "retry_wait", "", time.Now().Add(-time.Minute)); err != nil {
+				if err := s.Finish(ctx, id, 1, delivery.Outcome{State: "retry_wait", Reason: "dial_failed", NextAttemptAt: time.Now().Add(-time.Minute)}); err != nil {
 					t.Fatal(err)
 				}
 				if err := s.Tick(ctx, time.Hour); err != nil {
@@ -220,7 +223,7 @@ func TestLegacyScheduledNotificationUsesBatchTopic(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	v1, err := migrations.ReadFile("migrations/001_notification.sql")
 	if err != nil {
 		t.Fatal(err)
@@ -245,7 +248,7 @@ func TestLegacyScheduledNotificationUsesBatchTopic(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer s.Close()
+	defer func() { _ = s.Close() }()
 	if err := s.Tick(ctx, time.Hour); err != nil {
 		t.Fatal(err)
 	}
@@ -292,11 +295,19 @@ func TestCancelSendRace(t *testing.T) {
 }
 func TestGenerationFenceAndScheduledSend(t *testing.T) {
 	s := testStore(t)
-	ctx := t.Context()
+	ctx := observability.WithCorrelationID(t.Context(), "original-create")
 	item := sms()
 	future := time.Now().Add(time.Hour)
 	item.ScheduledAt = &future
-	id := createOne(t, s, item)
+	res, err := s.Create(ctx, uuid(), []byte("digest"), SingleIngress, []Item{item})
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := res.Items[0].ID
+	job, err := s.GetJob(ctx, id)
+	if err != nil || job.CorrelationID != "original-create" {
+		t.Fatalf("correlation after database round trip: %q, %v", job.CorrelationID, err)
+	}
 	if ok, err := s.Start(ctx, id, 1); err != nil || ok {
 		t.Fatalf("future claim: %v %v", ok, err)
 	}
@@ -313,7 +324,7 @@ func TestGenerationFenceAndScheduledSend(t *testing.T) {
 	if ok, err := s.Start(ctx, id, 1); err != nil || !ok {
 		t.Fatalf("scheduled claim: %v %v", ok, err)
 	}
-	if err := s.Finish(ctx, id, 1, "retry_wait", "", time.Now().Add(-time.Second)); err != nil {
+	if err := s.Finish(ctx, id, 1, delivery.Outcome{State: "retry_wait", Reason: "dial_failed", NextAttemptAt: time.Now().Add(-time.Second)}); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.Tick(ctx, time.Minute); err != nil {
@@ -328,11 +339,19 @@ func TestGenerationFenceAndScheduledSend(t *testing.T) {
 	if ok, err := s.Start(ctx, id, 2); err != nil || !ok {
 		t.Fatalf("retry claim: %v %v", ok, err)
 	}
-	if err := s.Finish(ctx, id, 1, "accepted", "old", time.Time{}); !errors.Is(err, ErrConflict) {
+	if err := s.Finish(ctx, id, 1, delivery.Outcome{State: "accepted", MessageID: "old", Reason: "provider_accepted", HTTPStatus: 202}); !errors.Is(err, ErrConflict) {
 		t.Fatalf("late finish: %v", err)
 	}
-	if err := s.Finish(ctx, id, 2, "accepted", "remote", time.Time{}); err != nil {
+	if err := s.Finish(ctx, id, 2, delivery.Outcome{State: "accepted", MessageID: "remote", Reason: "provider_accepted", HTTPStatus: 202}); err != nil {
 		t.Fatal(err)
+	}
+	// A subsequent successful attempt replaces the current outcome but must
+	// preserve the earlier retry's evidence in its own status event.
+	var recorded int
+	if err := s.db.QueryRow(`SELECT count(*) FROM status_events WHERE notification_id=$1 AND
+	    ((attempt=1 AND status='retry_wait' AND reason='dial_failed' AND provider_http_status IS NULL) OR
+	     (attempt=2 AND status='accepted' AND reason='provider_accepted' AND provider_http_status=202))`, id).Scan(&recorded); err != nil || recorded != 2 {
+		t.Fatalf("attempt history has %d matching results: %v", recorded, err)
 	}
 	if err := s.db.QueryRow("SELECT count(*) FROM outbox WHERE aggregateid=$1 AND aggregatetype='notifications.high.single'", id).Scan(&out); err != nil || out != 2 {
 		t.Fatalf("scheduled outbox count %d %v", out, err)
@@ -342,7 +361,7 @@ func TestGenerationFenceAndScheduledSend(t *testing.T) {
 		t.Fatalf("metrics: %+v %v", m, err)
 	}
 	n, err := s.List(ctx, Filter{Channel: "sms", Status: "accepted", Limit: 1})
-	if err != nil || len(n) != 1 || n[0].ID != id {
+	if err != nil || len(n) != 1 || n[0].ID != id || n[0].LastReason != "provider_accepted" || n[0].ProviderHTTPStatus == nil || *n[0].ProviderHTTPStatus != 202 || n[0].NextAttemptAt != nil {
 		t.Fatalf("list: %+v %v", n, err)
 	}
 }
@@ -373,8 +392,8 @@ func TestStaleRecoveryHonorsProviderContract(t *testing.T) {
 				t.Fatal(err)
 			}
 			n, err := s.Get(ctx, id)
-			if err != nil || n.Status != tc.want {
-				t.Fatalf("got %s %v", n.Status, err)
+			if err != nil || n.Status != tc.want || n.LastReason != "send_lease_expired" || n.ProviderHTTPStatus != nil || (n.NextAttemptAt != nil) != (tc.want == "retry_wait") {
+				t.Fatalf("recovered status: %+v %v", n, err)
 			}
 		})
 	}
@@ -433,7 +452,7 @@ func TestBatchChannelRoutesOnCreateAndPromotion(t *testing.T) {
 	if started, err := s.Start(ctx, id, 1); err != nil || !started {
 		t.Fatalf("start: %t %v", started, err)
 	}
-	if err := s.Finish(ctx, id, 1, "retry_wait", "", time.Now().Add(-time.Second)); err != nil {
+	if err := s.Finish(ctx, id, 1, delivery.Outcome{State: "retry_wait", Reason: "dial_failed", NextAttemptAt: time.Now().Add(-time.Second)}); err != nil {
 		t.Fatal(err)
 	}
 	s.channelBatch = false

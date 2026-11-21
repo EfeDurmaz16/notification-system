@@ -11,32 +11,42 @@ import (
 )
 
 type Notification struct {
-	ID          string     `json:"id"`
-	BatchID     string     `json:"batchId"`
-	Recipient   string     `json:"recipient"`
-	Channel     string     `json:"channel"`
-	Content     string     `json:"content"`
-	Priority    string     `json:"priority"`
-	Status      string     `json:"status"`
-	MessageID   string     `json:"messageId,omitempty"`
-	Attempt     int        `json:"attempt"`
-	CreatedAt   time.Time  `json:"createdAt"`
-	UpdatedAt   time.Time  `json:"updatedAt"`
-	ScheduledAt *time.Time `json:"scheduledAt,omitempty"`
+	LastReason         string     `json:"lastReason,omitempty"`
+	ProviderHTTPStatus *int       `json:"providerHttpStatus,omitempty"`
+	NextAttemptAt      *time.Time `json:"nextAttemptAt,omitempty"`
+	ID                 string     `json:"id"`
+	BatchID            string     `json:"batchId"`
+	Recipient          string     `json:"recipient"`
+	Channel            string     `json:"channel"`
+	Content            string     `json:"content"`
+	Priority           string     `json:"priority"`
+	Status             string     `json:"status"`
+	MessageID          string     `json:"messageId,omitempty"`
+	Attempt            int        `json:"attempt"`
+	CreatedAt          time.Time  `json:"createdAt"`
+	UpdatedAt          time.Time  `json:"updatedAt"`
+	ScheduledAt        *time.Time `json:"scheduledAt,omitempty"`
 }
 type Filter struct {
 	Status, Channel, BatchID string
 	From, To                 *time.Time
 	Limit, Offset            int
+	Before                   *ListPosition
 }
 
-const columns = `id,batch_id,recipient,channel,content,priority,status,message_id,attempt,created_at,updated_at,scheduled_at`
+// ListPosition identifies a row in the immutable creation-time ordering.
+type ListPosition struct {
+	CreatedAt time.Time
+	ID        string
+}
+
+const columns = `id,batch_id,recipient,channel,content,priority,status,message_id,attempt,created_at,updated_at,scheduled_at,last_reason,provider_http_status,next_attempt_at`
 
 type scanner interface{ Scan(...any) error }
 
 func scanNotification(r scanner) (Notification, error) {
 	var n Notification
-	err := r.Scan(&n.ID, &n.BatchID, &n.Recipient, &n.Channel, &n.Content, &n.Priority, &n.Status, &n.MessageID, &n.Attempt, &n.CreatedAt, &n.UpdatedAt, &n.ScheduledAt)
+	err := r.Scan(&n.ID, &n.BatchID, &n.Recipient, &n.Channel, &n.Content, &n.Priority, &n.Status, &n.MessageID, &n.Attempt, &n.CreatedAt, &n.UpdatedAt, &n.ScheduledAt, &n.LastReason, &n.ProviderHTTPStatus, &n.NextAttemptAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		err = ErrNotFound
 	}
@@ -73,6 +83,10 @@ func (s *Store) List(ctx context.Context, f Filter) ([]Notification, error) {
 	if f.To != nil {
 		add("created_at <", *f.To)
 	}
+	if f.Before != nil {
+		args = append(args, f.Before.CreatedAt, f.Before.ID)
+		where = append(where, fmt.Sprintf("(created_at,id) < ($%d,$%d)", len(args)-1, len(args)))
+	}
 	q := "SELECT " + columns + " FROM notifications"
 	if len(where) > 0 {
 		q += " WHERE " + strings.Join(where, " AND ")
@@ -83,7 +97,7 @@ func (s *Store) List(ctx context.Context, f Filter) ([]Notification, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := []Notification{}
 	for rows.Next() {
 		n, err := scanNotification(rows)
@@ -111,7 +125,7 @@ func (s *Store) GetBatch(ctx context.Context, id string) (BatchResult, error) {
 	if err != nil {
 		return BatchResult{}, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	for rows.Next() {
 		var i int
 		var status string

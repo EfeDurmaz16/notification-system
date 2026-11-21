@@ -2,6 +2,8 @@ SHELL := /bin/bash
 .DEFAULT_GOAL := help
 
 GO ?= go
+GOLANGCI_LINT ?= golangci-lint
+GOVULNCHECK_VERSION := v1.10.0
 COMPOSE ?= docker compose
 API_URL ?= http://127.0.0.1:$(or $(API_PORT),8080)
 MOCK_PROVIDER_URL ?= http://127.0.0.1:$(or $(PROVIDER_PORT),8090)
@@ -11,10 +13,12 @@ TEST_DATABASE_URL ?= postgres://notify:notify@127.0.0.1:$(or $(POSTGRES_PORT),54
 RESULTS ?= .local/results
 LOAD_FLAGS ?=
 
-.PHONY: help fmt lint test race build check up down smoke integration ci performance burst load stress mixed failures package openapi contract matrix recovery crash rebalance quarantine drain wave channel-isolation sustained-mixed verify-all
+.PHONY: help fmt lint vuln test race build check up down smoke integration ci performance burst load stress mixed failures package openapi contract matrix recovery crash rebalance quarantine drain wave channel-isolation sustained-mixed verify-all
 
 help:
-	@printf '%s\n' 'make check        Format check, vet, unit tests, race detector, binaries' \
+	@printf '%s\n' 'make check        Format check, vet, golangci-lint, unit tests, race detector, binaries' \
+		'make test         Unit tests and per-test skip reasons' \
+		'make vuln         Check reachable Go vulnerabilities using the current Go database' \
 		'make up / down    Start / stop Compose without deleting data' \
 		'make integration  Start Compose, run database integration tests and HTTP smoke test' \
 		'make ci           Run the local functional CI suite' \
@@ -30,15 +34,22 @@ help:
 		'make package      Package committed sources and matching native binaries in dist/'
 
 fmt:
-	gofmt -w $$(find . -name '*.go' -not -path './vendor/*' -not -path './.git/*')
+	gofmt -w $$(find . \( -name .git -o -name .local -o -name vendor \) -prune -o -name '*.go' -print)
 
 lint:
-	@files=$$(gofmt -l $$(find . -name '*.go' -not -path './vendor/*' -not -path './.git/*')); \
+	@files=$$(gofmt -l $$(find . \( -name .git -o -name .local -o -name vendor \) -prune -o -name '*.go' -print)); \
 		if [[ -n "$$files" ]]; then printf 'Run gofmt on:\n%s\n' "$$files"; exit 1; fi
 	$(GO) vet ./...
+	$(GOLANGCI_LINT) run --max-same-issues=0 --max-issues-per-linter=0 ./...
+
+vuln:
+	$(GO) run golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION) ./...
 
 test:
-	$(GO) test -count=1 ./...
+	@set -o pipefail; $(GO) test -v -count=1 ./... | awk '{ print } \
+		/^[[:space:]]*--- SKIP:/ { skipped++ } \
+		END { if (skipped) printf "\n%d Go tests skipped. Run make integration for service-backed tests or make ci for the full functional suite.\n", skipped }'
+	python3 -B -m unittest discover -s scripts -p 'test_*.py'
 
 race:
 	$(GO) test -race -count=1 ./...
@@ -66,12 +77,13 @@ contract:
 
 integration:
 	PROVIDER_URL=http://provider:8081/send PROVIDER_IDEMPOTENT=false $(COMPOSE) up --build -d --wait --wait-timeout 300
+	python3 -B scripts/check-routing.py
 	TEST_DATABASE_URL="$(TEST_DATABASE_URL)" $(GO) test -race -count=1 -v ./internal/store
 	TEST_KAFKA_BROKER="$(TEST_KAFKA_BROKER)" TEST_REDIS_ADDR="$(TEST_REDIS_ADDR)" $(GO) test -race -count=1 -v ./internal/stream
 	$(MAKE) smoke contract
 	python3 scripts/check-outcome-report.py
 
-ci: check openapi integration quarantine drain
+ci: check vuln openapi integration quarantine drain
 
 performance:
 	mkdir -p "$(RESULTS)"

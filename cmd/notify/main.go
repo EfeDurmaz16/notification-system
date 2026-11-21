@@ -24,7 +24,12 @@ import (
 )
 
 func main() {
-	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
+	var level slog.Level
+	if err := level.UnmarshalText([]byte(env("LOG_LEVEL", "INFO"))); err != nil {
+		fmt.Fprintln(os.Stderr, "invalid LOG_LEVEL")
+		os.Exit(1)
+	}
+	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: level})))
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	if err := run(ctx, os.Args[1:]); err != nil && !errors.Is(err, context.Canceled) {
@@ -61,28 +66,16 @@ func run(ctx context.Context, args []string) error {
 	default:
 		return errors.New("BATCH_ROUTING must be shared, dual-read or channel")
 	}
+	slog.Info("routing configured", "mode", mode, "batch_routing", batchRouting)
 	connect, cancel := context.WithTimeout(ctx, 30*time.Second)
 	db, err := store.Open(connect, dsn, batchRouting == "channel")
 	cancel()
 	if err != nil {
 		return fmt.Errorf("open database: %w", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	if mode == "api" {
 		return serve(ctx, env("HTTP_ADDR", ":8080"), observability.HTTP(api.New(db)))
-	}
-	endpoint := os.Getenv("PROVIDER_URL")
-	u, err := url.ParseRequestURI(endpoint)
-	if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {
-		return errors.New("PROVIDER_URL must be an absolute HTTP(S) URL")
-	}
-	idempotent, err := strconv.ParseBool(env("PROVIDER_IDEMPOTENT", "false"))
-	if err != nil {
-		return errors.New("invalid PROVIDER_IDEMPOTENT")
-	}
-	window, err := time.ParseDuration(env("PROVIDER_KEY_WINDOW", "24h"))
-	if err != nil || window <= 0 {
-		return errors.New("invalid PROVIDER_KEY_WINDOW")
 	}
 	workers, err := strconv.Atoi(env("WORKER_CONCURRENCY", "32"))
 	if err != nil || workers < 1 || workers > 512 {
@@ -95,14 +88,14 @@ func run(ctx context.Context, args []string) error {
 	brokers := strings.Split(env("KAFKA_BROKERS", "localhost:19092"), ",")
 	cfg := stream.Config{ChannelReaders: batchRouting != "shared", Brokers: brokers, Group: env("KAFKA_GROUP", "notification-delivery"),
 		RedisAddr: env("REDIS_ADDR", "localhost:16379"), Workers: workers, BatchSharePercent: batchShare}
-	engine := &delivery.Engine{Store: db, URL: endpoint, Idempotent: idempotent, IdempotencyWindow: window,
-		Client: &http.Client{Timeout: 5 * time.Second}}
-	recoveryWindow := time.Duration(0)
-	if idempotent {
-		recoveryWindow = window
+	engine, err := providerEngine(db)
+	if err != nil {
+		return err
 	}
-	const maxAttempts = 4
-	engine.MaxAttempts = maxAttempts
+	recoveryWindow := time.Duration(0)
+	if engine.Idempotent {
+		recoveryWindow = engine.IdempotencyWindow
+	}
 	group, workCtx := errgroup.WithContext(ctx)
 	group.Go(func() error { return stream.Run(workCtx, cfg, db, engine) })
 	group.Go(func() error {
@@ -113,13 +106,48 @@ func run(ctx context.Context, args []string) error {
 			case <-workCtx.Done():
 				return workCtx.Err()
 			case <-tick.C:
-				if err := db.TickWithRecovery(workCtx, 2*time.Minute, recoveryWindow, maxAttempts); err != nil && workCtx.Err() == nil {
+				if err := db.TickWithRecovery(workCtx, 2*time.Minute, recoveryWindow, engine.MaxAttempts); err != nil && workCtx.Err() == nil {
 					slog.Error("schedule due work", "error", err)
 				}
 			}
 		}
 	})
 	return group.Wait()
+}
+
+func providerEngine(db delivery.Store) (*delivery.Engine, error) {
+	endpoint := os.Getenv("PROVIDER_URL")
+	u, err := url.ParseRequestURI(endpoint)
+	if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {
+		return nil, errors.New("PROVIDER_URL must be an absolute HTTP(S) URL")
+	}
+	idempotent, err := strconv.ParseBool(env("PROVIDER_IDEMPOTENT", "false"))
+	if err != nil {
+		return nil, errors.New("invalid PROVIDER_IDEMPOTENT")
+	}
+	window, err := time.ParseDuration(env("PROVIDER_KEY_WINDOW", "24h"))
+	if err != nil || window <= 0 {
+		return nil, errors.New("invalid PROVIDER_KEY_WINDOW")
+	}
+	attempts, err := strconv.Atoi(env("RETRY_MAX_ATTEMPTS", strconv.Itoa(delivery.DefaultMaxAttempts)))
+	if err != nil || attempts < 1 || attempts > 100 {
+		return nil, errors.New("RETRY_MAX_ATTEMPTS must be between 1 and 100")
+	}
+	base, err := time.ParseDuration(env("RETRY_BASE_BACKOFF", delivery.DefaultBaseBackoff.String()))
+	if err != nil || base <= 0 || base > time.Minute {
+		return nil, errors.New("RETRY_BASE_BACKOFF must be positive and at most 1m")
+	}
+	// The bundled simulator rejects throttled attempts before creating a receipt.
+	// An external URL needs its own explicit guarantee.
+	fixtureRejects := endpoint == "http://provider:8081/send"
+	throttleRejects, err := strconv.ParseBool(env("PROVIDER_429_NOT_ACCEPTED", strconv.FormatBool(fixtureRejects)))
+	if err != nil {
+		return nil, errors.New("invalid PROVIDER_429_NOT_ACCEPTED")
+	}
+	return &delivery.Engine{
+		Store: db, URL: endpoint, Idempotent: idempotent, IdempotencyWindow: window,
+		MaxAttempts: attempts, BaseBackoff: base, ThrottleRejects: throttleRejects,
+	}, nil
 }
 
 func env(key, fallback string) string {

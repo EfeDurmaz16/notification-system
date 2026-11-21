@@ -13,19 +13,21 @@ import (
 )
 
 type recordStore struct {
-	starts, finishes    int
-	state, messageID    string
-	due                 time.Time
-	startErr, finishErr error
+	starts, finishes         int
+	state, messageID, reason string
+	httpStatus               int
+	due                      time.Time
+	startErr, finishErr      error
 }
 
 func (s *recordStore) Start(context.Context, string, int) (bool, error) {
 	s.starts++
 	return true, s.startErr
 }
-func (s *recordStore) Finish(_ context.Context, _ string, _ int, state, messageID string, due time.Time) error {
+func (s *recordStore) Finish(_ context.Context, _ string, _ int, out Outcome) error {
 	s.finishes++
-	s.state, s.messageID, s.due = state, messageID, due
+	s.state, s.messageID, s.due = out.State, out.MessageID, out.NextAttemptAt
+	s.reason, s.httpStatus = out.Reason, out.HTTPStatus
 	return s.finishErr
 }
 
@@ -42,6 +44,8 @@ func TestProviderContract(t *testing.T) {
 		state      string
 	}{
 		{"accepted", 202, `{"messageId":"msg123","status":"accepted","timestamp":"2026-01-01T00:00:00Z"}`, false, accepted},
+		{"unexpected HTTP status with a receipt", 200, `{"messageId":"msg123","status":"accepted","timestamp":"2026-01-01T00:00:00Z"}`, false, unknown},
+		{"format placeholder instead of a date", 202, `{"messageId":"msg123","status":"accepted","timestamp":"ISO8601"}`, false, unknown},
 		{"incomplete ack", 202, `{"messageId":"msg123","status":"accepted"}`, false, unknown},
 		{"malformed ack", 202, "{", false, unknown},
 		{"rejected", 400, "{}", false, failed},
@@ -61,7 +65,7 @@ func TestProviderContract(t *testing.T) {
 					t.Errorf("unexpected provider key %q", got)
 				}
 				w.WriteHeader(tc.status)
-				fmt.Fprint(w, tc.body)
+				_, _ = fmt.Fprint(w, tc.body)
 			}))
 			defer server.Close()
 			store := new(recordStore)
@@ -71,6 +75,9 @@ func TestProviderContract(t *testing.T) {
 			}
 			if store.starts != 1 || store.finishes != 1 || store.state != tc.state {
 				t.Fatalf("store=%+v want %s", store, tc.state)
+			}
+			if store.reason == "" || store.httpStatus != tc.status {
+				t.Fatalf("missing attempt evidence: %+v", store)
 			}
 			if (tc.state == retryWait) != store.due.After(time.Now()) {
 				t.Fatalf("unexpected retry timestamp %v", store.due)
@@ -94,14 +101,14 @@ func TestLostAckRetriesOnlyWithProviderGuarantee(t *testing.T) {
 						t.Error(err)
 						return
 					}
-					conn.Close()
+					_ = conn.Close()
 					return
 				}
 				if r.Header.Get("Idempotency-Key") != first.ID {
 					t.Error("retry changed provider key")
 				}
 				w.WriteHeader(202)
-				fmt.Fprint(w, `{"messageId":"original","status":"accepted","timestamp":"2026-01-01T00:00:00Z"}`)
+				_, _ = fmt.Fprint(w, `{"messageId":"original","status":"accepted","timestamp":"2026-01-01T00:00:00Z"}`)
 			}))
 			defer server.Close()
 			store := new(recordStore)
@@ -137,7 +144,9 @@ func TestNeverFollowProviderRedirect(t *testing.T) {
 	var destinationPosts atomic.Int32
 	dst := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { destinationPosts.Add(1) }))
 	defer dst.Close()
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { http.Redirect(w, r, dst.URL, 307) }))
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, dst.URL, http.StatusTemporaryRedirect)
+	}))
 	defer server.Close()
 	store := new(recordStore)
 	engine := Engine{URL: server.URL, Client: server.Client(), Store: store}
@@ -208,7 +217,7 @@ func BenchmarkBuildProviderRequest(b *testing.B) {
 		if err != nil {
 			b.Fatal(err)
 		}
-		req.Body.Close()
+		_ = req.Body.Close()
 	}
 }
 
@@ -229,7 +238,7 @@ func TestRetryRejectionPreservesUnknown(t *testing.T) {
 				t.Error(err)
 				return
 			}
-			conn.Close()
+			_ = conn.Close()
 			return
 		}
 		w.WriteHeader(http.StatusUnauthorized)

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"errors"
 	"net/mail"
 	"regexp"
@@ -19,7 +20,29 @@ type notificationInput struct {
 	Priority    string            `json:"priority"`
 	ScheduledAt *time.Time        `json:"scheduledAt"`
 	Template    *string           `json:"template"`
-	Variables   map[string]string `json:"variables"`
+	Variables   templateVariables `json:"variables"`
+}
+
+type templateVariables map[string]string
+
+// encoding/json otherwise coerces a null map value to the empty string.
+func (v *templateVariables) UnmarshalJSON(data []byte) error {
+	var input map[string]*string
+	if err := json.Unmarshal(data, &input); err != nil {
+		return err
+	}
+	if input == nil {
+		return errors.New("variables must be an object")
+	}
+	values := make(templateVariables, len(input))
+	for name, value := range input {
+		if value == nil {
+			return errors.New("template variable must be a string")
+		}
+		values[name] = *value
+	}
+	*v = values
+	return nil
 }
 
 var phone = regexp.MustCompile(`^\+[1-9][0-9]{1,14}$`)
@@ -29,6 +52,15 @@ func validateItem(raw []byte) store.Item {
 	var in notificationInput
 	if err := strictJSON(raw, &in); err != nil {
 		return store.Item{Error: "invalid notification fields or timestamp"}
+	}
+	if in.ScheduledAt != nil {
+		// PostgreSQL stores microseconds. Keep the stored instant representable
+		// as an RFC 3339 year, including after applying the client's UTC offset.
+		utc := in.ScheduledAt.UTC().Round(time.Microsecond)
+		if in.ScheduledAt.Year() == 0 || utc.Year() < 1 || utc.Year() > 9999 {
+			return store.Item{Error: "scheduledAt must fall in years 0001 to 9999 UTC"}
+		}
+		in.ScheduledAt = &utc
 	}
 	if !validRecipient(in.Channel, in.Recipient) {
 		return store.Item{Error: "invalid channel or recipient"}

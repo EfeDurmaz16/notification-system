@@ -22,9 +22,19 @@ jobs:
       - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: go.mod
+      - name: Install golangci-lint v2.12.2
+        working-directory: ${{ runner.temp }}
+        run: |
+          archive=golangci-lint-2.12.2-linux-amd64
+          curl --fail --location --retry 3 --output "$archive.tar.gz" "https://github.com/golangci/golangci-lint/releases/download/v2.12.2/$archive.tar.gz"
+          echo "8df580d2670fed8fa984aac0507099af8df275e665215f5c7a2ae3943893a553  $archive.tar.gz" | sha256sum --check
+          tar -xzf "$archive.tar.gz" "$archive/golangci-lint"
+          echo "$PWD/$archive" >> "$GITHUB_PATH"
       - run: make check openapi
       - name: Verify module checksums
         run: go mod verify
+      - name: Check reachable Go vulnerabilities
+        run: make vuln
       - name: Isolated benchmarks
         run: make performance RESULTS=.local/ci
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

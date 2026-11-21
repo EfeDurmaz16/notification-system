@@ -18,6 +18,19 @@ import (
 
 const scope = "notification-system"
 
+type correlationKey struct{}
+
+// WithCorrelationID carries the validated API request identifier into persistence.
+func WithCorrelationID(ctx context.Context, id string) context.Context {
+	return context.WithValue(ctx, correlationKey{}, id)
+}
+
+// CorrelationID returns the request identifier supplied by the API middleware.
+func CorrelationID(ctx context.Context) string {
+	id, _ := ctx.Value(correlationKey{}).(string)
+	return id
+}
+
 // Setup installs process-wide tracing during startup. With no endpoint the service
 // still creates valid W3C trace IDs usable for log correlation.
 func Setup(ctx context.Context, service string) (func(context.Context) error, error) {

@@ -29,6 +29,13 @@ Every reader feeds the same worker pool. Priority weighting, the standalone/batc
 3. Switch API and worker processes to `BATCH_ROUTING=channel`. Keep the legacy subscriptions running. The new mode routes fresh batch creates and future promotions by channel. An earlier durable ready record is still consumed on its original topic and group offset. A scheduled job or retry can cross the change of mode because the due transition and its new outbox record share a transaction.
 4. Subscribe independent consumers that need the complete ready stream to both topic families and the standalone topics. Monitor per-channel group lag and the oldest pending age during the change.
 
+Run `python3 -B scripts/check-routing.py` against the active Compose project after each change.
+It checks running API and worker settings, including mixed worker modes during a rollout. When
+every worker uses `shared`, it also checks PostgreSQL for pending notifications whose current
+attempt has an outbox record targeting a channel topic. A failure calls for restoring a `dual-read` worker
+and checking its Kafka group assignments. The check reads configuration and durable rows.
+Use group membership and connector lag to verify actual consumption and CDC progress.
+
 ## Roll back
 
 Switch both API and worker processes to `dual-read`. All new batch writes then target the shared topics while workers continue to drain channel topics. This is a supported steady state.
