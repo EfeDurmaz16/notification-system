@@ -59,16 +59,14 @@ func run(ctx context.Context, args []string) error {
 	if dsn == "" {
 		return errors.New("DATABASE_URL must be set")
 	}
-	// Roll out dual-read workers before enabling channel-routed producers.
-	batchRouting := env("BATCH_ROUTING", "shared")
-	switch batchRouting {
-	case "shared", "dual-read", "channel":
-	default:
-		return errors.New("BATCH_ROUTING must be shared, dual-read or channel")
+	modeName := env("BATCH_ROUTING", "shared")
+	writes, reads, err := routing(modeName)
+	if err != nil {
+		return err
 	}
-	slog.Info("routing configured", "mode", mode, "batch_routing", batchRouting)
+	slog.Info("routing configured", "mode", mode, "batch_routing", modeName)
 	connect, cancel := context.WithTimeout(ctx, 30*time.Second)
-	db, err := store.Open(connect, dsn, batchRouting == "channel")
+	db, err := store.Open(connect, dsn, writes)
 	cancel()
 	if err != nil {
 		return fmt.Errorf("open database: %w", err)
@@ -86,7 +84,7 @@ func run(ctx context.Context, args []string) error {
 		return errors.New("BATCH_SHARE_PERCENT must be between 1 and 49")
 	}
 	brokers := strings.Split(env("KAFKA_BROKERS", "localhost:19092"), ",")
-	cfg := stream.Config{ChannelReaders: batchRouting != "shared", Brokers: brokers, Group: env("KAFKA_GROUP", "notification-delivery"),
+	cfg := stream.Config{ChannelReaders: reads, Brokers: brokers, Group: env("KAFKA_GROUP", "notification-delivery"),
 		RedisAddr: env("REDIS_ADDR", "localhost:16379"), Workers: workers, BatchSharePercent: batchShare}
 	engine, err := providerEngine(db)
 	if err != nil {
@@ -113,6 +111,26 @@ func run(ctx context.Context, args []string) error {
 		}
 	})
 	return group.Wait()
+}
+
+// Legacy modes keep their published topics and consumer group offsets.
+// During rollout a reader can drain both formats before writers switch.
+func routing(mode string) (writes, reads store.ChannelRoutes, err error) {
+	switch mode {
+	case "shared":
+	case "dual-read":
+		reads.Batch = true
+	case "channel":
+		writes.Batch, reads.Batch = true, true
+	case "read-isolated":
+		writes.Batch, reads.Batch, reads.Single = true, true, true
+	case "isolated":
+		writes = store.ChannelRoutes{Batch: true, Single: true}
+		reads = writes
+	default:
+		err = fmt.Errorf("unknown BATCH_ROUTING %q: expected shared, dual-read, channel, read-isolated or isolated", mode)
+	}
+	return writes, reads, err
 }
 
 func providerEngine(db delivery.Store) (*delivery.Engine, error) {

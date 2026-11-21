@@ -46,7 +46,7 @@ func TestMetricRollupTracksTransactionsAndLatencyBounds(t *testing.T) {
 func TestRetentionRequiresPublicationEvidenceAndPreservesUnresolved(t *testing.T) {
 	dsn := testDSN(t)
 	ctx := t.Context()
-	s, err := Open(ctx, dsn, false)
+	s, err := Open(ctx, dsn, ChannelRoutes{})
 	if err != nil {
 		t.Fatal(err)
 	}

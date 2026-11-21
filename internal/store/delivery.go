@@ -158,8 +158,8 @@ func (s *Store) TickWithRecovery(ctx context.Context, staleAfter, idempotencyWin
     ),added AS (
         UPDATE notifications n SET status='pending',updated_at=clock_timestamp(),next_attempt_at=NULL,
             attempt=n.attempt+CASE WHEN n.status='retry_wait' THEN 1 ELSE 0 END
-        FROM due WHERE n.id=due.id RETURNING n.id,n.priority,n.ingress,n.status,n.attempt,n.traceparent,n.channel,$1::boolean AS channel_batch
-    ) `+emitReady, s.channelBatch)
+        FROM due WHERE n.id=due.id RETURNING n.id,n.priority,n.ingress,n.status,n.attempt,n.traceparent,n.channel,$1::boolean AS channel_batch,$2::boolean AS channel_single
+    ) `+emitReady, s.routes.Batch, s.routes.Single)
 	if err != nil {
 		return err
 	}

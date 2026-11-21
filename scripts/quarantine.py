@@ -4,11 +4,11 @@ import argparse
 import json
 from pathlib import Path
 
-from recovery import Experiment, require, wait_until
+from recovery import Experiment, single_source, require, wait_until
 
 
-SOURCE = "notifications.normal.single"
-GROUP = "delivery.normal.single"
+SOURCE, _ = single_source()
+GROUP = SOURCE.replace("notifications.", "delivery.", 1)
 INVALID = "notifications.invalid"
 
 

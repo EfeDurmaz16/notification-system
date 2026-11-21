@@ -25,12 +25,17 @@ var (
 //go:embed migrations/*.sql
 var migrations embed.FS
 
-type Store struct {
-	db           *sql.DB
-	channelBatch bool
+// ChannelRoutes selects which ingress lanes publish to per-channel topics.
+type ChannelRoutes struct {
+	Batch, Single bool
 }
 
-func Open(ctx context.Context, dsn string, channelBatch bool) (*Store, error) {
+type Store struct {
+	db     *sql.DB
+	routes ChannelRoutes
+}
+
+func Open(ctx context.Context, dsn string, routes ChannelRoutes) (*Store, error) {
 	db, err := sql.Open("pgx", dsn)
 	if err != nil {
 		return nil, err
@@ -38,7 +43,7 @@ func Open(ctx context.Context, dsn string, channelBatch bool) (*Store, error) {
 	db.SetMaxOpenConns(24)
 	db.SetMaxIdleConns(12)
 	db.SetConnMaxLifetime(30 * time.Minute)
-	s := &Store{db: db, channelBatch: channelBatch}
+	s := &Store{db: db, routes: routes}
 	if err := s.migrate(ctx); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("migrate: %w", err)
@@ -198,8 +203,8 @@ func (s *Store) Create(ctx context.Context, key string, hash []byte, ingress Ing
                 CASE WHEN x."Status"='scheduled' THEN x."Scheduled" END,$3,$4,$6
             FROM jsonb_to_recordset($2::jsonb) AS x("ID" uuid,"Index" int,"Recipient" text,"Channel" text,"Content" text,
                 "Priority" text,"Status" text,"Scheduled" timestamptz)
-            RETURNING id,priority,ingress,status,attempt,traceparent,channel,$5::boolean AS channel_batch)
-            `+emitReady, res.BatchID, data, observability.Traceparent(ctx), ingress, s.channelBatch, observability.CorrelationID(ctx))
+            RETURNING id,priority,ingress,status,attempt,traceparent,channel,$5::boolean AS channel_batch,$7::boolean AS channel_single)
+            `+emitReady, res.BatchID, data, observability.Traceparent(ctx), ingress, s.routes.Batch, observability.CorrelationID(ctx), s.routes.Single)
 		if err != nil {
 			return BatchResult{}, err
 		}
@@ -211,7 +216,8 @@ func (s *Store) Create(ctx context.Context, key string, hash []byte, ingress Ing
 }
 
 const emitReady = `INSERT INTO outbox(aggregatetype,aggregateid,type,payload)
-    SELECT 'notifications.' || priority || CASE WHEN ingress='single' THEN '.single'
+    SELECT 'notifications.' || priority || CASE WHEN ingress='single' AND channel_single THEN '.single.' || channel
+        WHEN ingress='single' THEN '.single'
         WHEN channel_batch THEN '.batch.' || channel ELSE '' END,
         id,'NotificationReady',
         jsonb_build_object('id',id,'attempt',attempt,'traceparent',traceparent)

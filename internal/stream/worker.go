@@ -22,7 +22,7 @@ import (
 const DefaultBatchSharePercent = 20
 
 type Config struct {
-	ChannelReaders    bool
+	ChannelReaders    dbstore.ChannelRoutes
 	BatchSharePercent int
 	Brokers           []string
 	Group             string
@@ -106,7 +106,7 @@ func pollLimit(workers, class int) int {
 }
 
 // Source zero is the original reader for this lane. Indices one through
-// three are batch-only, one per channel. All feed the same scheduler and pool.
+// three are per-channel readers within the same lane. All feed the same scheduler and pool.
 type reader struct {
 	route
 	source int
@@ -116,6 +116,9 @@ func (r reader) suffix() string {
 	if r.source == 0 {
 		return r.route.suffix()
 	}
+	if r.lane == singleLane {
+		return r.route.suffix() + "." + channels[r.source-1]
+	}
 	return priorities[r.class] + ".batch." + channels[r.source-1]
 }
 
@@ -123,12 +126,15 @@ func (r reader) window(workers, batchPercent int) pollWindow {
 	if r.source == 0 {
 		return r.route.window(workers, batchPercent)
 	}
-	// Divide the original batch poll budget across the three independent
+	// Divide the original lane poll budget across the three independent
 	// readers. A reader must be able to request at least one record.
 	capacity := pollLimit(workers, r.class)
 	base := capacity / len(channels)
 	if r.source <= capacity%len(channels) {
 		base++
+	}
+	if r.lane == singleLane {
+		return newWindow(max(1, base), 100-batchPercent)
 	}
 	return newWindow(max(1, base), batchPercent)
 }
@@ -443,12 +449,12 @@ func Run(ctx context.Context, cfg Config, store Store, engine *delivery.Engine) 
 	for p := range priorities {
 		for _, lane := range [...]ingressLane{bulkLane, singleLane} {
 			group.Go(func() error { return consume(ctx, cfg, reader{route: route{p, lane}}, store, input, brokerWarnings) })
-		}
-		if cfg.ChannelReaders {
-			for ch := range channels {
-				group.Go(func() error {
-					return consume(ctx, cfg, reader{route{p, bulkLane}, ch + 1}, store, input, brokerWarnings)
-				})
+			if lane == bulkLane && cfg.ChannelReaders.Batch || lane == singleLane && cfg.ChannelReaders.Single {
+				for ch := range channels {
+					group.Go(func() error {
+						return consume(ctx, cfg, reader{route{p, lane}, ch + 1}, store, input, brokerWarnings)
+					})
+				}
 			}
 		}
 	}

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check whether the running Compose workers can read the producers' batch topics."""
+"""Check whether the running Compose workers can read the producers' ready topics."""
 
 import subprocess
 import sys
@@ -17,7 +17,7 @@ def running_modes(service):
     for container in ids.splitlines():
         # Read exactly one variable; the container environment also holds provider credentials.
         mode = output("docker", "exec", container, "sh", "-c", 'printf "%s" "${BATCH_ROUTING:-shared}"')
-        if mode not in {"channel", "dual-read", "shared"}:
+        if mode not in {"channel", "dual-read", "shared", "read-isolated", "isolated"}:
             raise ValueError(f"Unrecognized routing mode on {service} {container[:12]}")
         modes.append(mode)
     return modes
@@ -27,16 +27,22 @@ def check():
     writers = running_modes("api")
     workers = running_modes("worker")
     print(f"Running API routing: {', '.join(writers)}. Worker routing: {', '.join(workers)}.")
-    if any(mode in {"channel", "dual-read"} for mode in workers):
+    if any(mode in {"isolated", "read-isolated"} for mode in workers):
         return
-    if "channel" in writers:
+    if "isolated" in writers:
+        raise ValueError("The API writes isolated standalone topics without a worker that reads them")
+    shared_only = all(mode == "shared" for mode in workers)
+    if shared_only and any(mode in {"channel", "read-isolated"} for mode in writers):
         raise ValueError("The API writes channel batch topics but all workers read shared topics only")
-    # An earlier producer may have committed channel work before this rollback.
-    # Match the current generation so a retried notification does not give a false alarm.
-    query = """
+    # After a rollback, an earlier writer's current generation can still be
+    # waiting for a reader even when all live writers have compatible settings.
+    unread = "o.aggregatetype LIKE 'notifications.%.single.%'"
+    if shared_only:
+        unread += " OR o.aggregatetype LIKE 'notifications.%.batch.%'"
+    query = f"""
         SELECT EXISTS (
             SELECT 1 FROM notifications n JOIN outbox o ON o.aggregateid = n.id
-            WHERE n.status = 'pending' AND o.aggregatetype LIKE 'notifications.%.batch.%'
+            WHERE n.status = 'pending' AND ({unread})
               AND o.payload->>'attempt' = n.attempt::text
         )
     """

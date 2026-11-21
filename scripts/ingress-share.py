@@ -13,7 +13,7 @@ import urllib.request
 import time
 import uuid
 
-from recovery import batch_source
+from recovery import batch_source, single_source
 
 ROOT = Path(__file__).resolve().parents[1]
 # Number of campaign items, standalone requests, offered standalone requests per second.
@@ -197,7 +197,7 @@ def run(name, api, provider):
     counts = Counter(r["lane"] for r in rows)
     assert len(rows) == expected and counts["batch"] == n_bulk and counts["single"] == n_single
     ingress = {"single": "single", "batch": "batch", "control": "batch"}
-    routes = {"single": "notifications.low.single", "batch": batch_source("low")[0]}
+    routes = {"single": single_source("low")[0], "batch": batch_source("low")[0]}
     assert all(r["status"] == "accepted" and r["attempt"] == 1 and r["priority"] == "low"
                and ingress[r["lane"]] == r["ingress"] and r["route"] == routes[r["ingress"]] for r in rows)
     result = {lane: summarize_lane([row for row in rows if row["lane"] == lane]) for lane in LANES}

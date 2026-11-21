@@ -9,7 +9,7 @@ x-app: &app
     REDIS_ADDR: redis:6379
     LOG_LEVEL: ${LOG_LEVEL:-INFO}
     KAFKA_GROUP: delivery
-    BATCH_ROUTING: ${BATCH_ROUTING:-channel}
+    BATCH_ROUTING: ${BATCH_ROUTING:-isolated}
     PROVIDER_URL: ${PROVIDER_URL:-http://provider:8081/send}
     PROVIDER_IDEMPOTENT: ${PROVIDER_IDEMPOTENT:-false}
     PROVIDER_KEY_WINDOW: ${PROVIDER_KEY_WINDOW:-24h}
@@ -76,6 +76,7 @@ services:
         for tier in high normal low; do
           for channel in sms email push; do
             /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic notifications.$$tier.batch.$$channel --partitions 1 --replication-factor 1
+            /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic notifications.$$tier.single.$$channel --partitions 3 --replication-factor 1
           done
         done
         /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic notifications.invalid --partitions 1 --replication-factor 1
