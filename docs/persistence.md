@@ -12,7 +12,21 @@ A due-time scan uses bounded chunks and row locks with SKIP LOCKED. Promoting a 
 
 Only outbox INSERTs carry ready events. The rows contain an ID, attempt and trace context; recipient and content stay in PostgreSQL. Republished events are safe for dispatch because the send claim is conditional. Each consumer group should independently handle replay for its own effects.
 
-This assessment retains idempotency responses, terminal rows, status audit events, and outbox rows. There is no expiry job; storage grows with traffic. For a longer-running deployment, define customer replay and audit windows, monitor outbox growth and replication-slot WAL lag, and design cleanup against verified connector progress. Expiring an idempotency key too early permits a repeated create to become a new operation. Do not delete outbox rows simply because they are old while the connector is behind.
+The delivery contract keeps notification lookups, batch responses and idempotency keys available indefinitely. These tables grow with admissions. Set customer lookup and replay windows before expiring them. Monitor table sizes and replication-slot WAL lag independently.
+
+An operator can prune old audit transitions and already-published outbox events with `scripts/retention.sql`. Choose a cutoff that satisfies your audit requirements and archive the data first if it must remain available. The command previews one chunk. Supply `-v apply=true` to commit it. Use a cutoff strictly in the past.
+
+```sh
+psql "$DATABASE_URL" -X -v before='2026-01-01T00:00:00Z' -f scripts/retention.sql
+```
+
+Each call considers at most 1,000 audit events for notifications already `accepted`, `failed` or `cancelled` before the cutoff. Unresolved `unknown` notifications retain their full history. Historical outcome reports and live status use the notification rows, while attempt-by-attempt forensic and stage-latency queries lose the pruned history.
+
+For outbox cleanup, pass `-v published_ids="$EVENT_IDS"` with up to 1,000 comma-separated **outbox event UUIDs** from Kafka records observed on this deployment's ready topics. Debezium puts the outbox UUID in the `id` header. The Kafka record key is the notification UUID. Never build this list from PostgreSQL. With an empty list, zero outbox rows qualify. This allows CDC outages to last longer than the retention window without aging out unpublished work. Register the bundled connector configuration before applying cleanup so deletes emit no tombstones. [Debezium event headers and delete handling](https://debezium.io/documentation/reference/stable/transformations/outbox-event-router.html)
+
+## Metrics over long histories
+
+State counts and acceptance latency buckets are maintained in the same transaction as the notification change. Thirty-two stripes distribute counter updates across rows. A scrape aggregates the bounded totals table, uses a partial index for the last five minutes of outcomes and reads the oldest pending timestamp from the status index. The initial migration performs one full backfill and index build under the migration lock. Schedule the upgrade during a quiet period on a populated database.
 
 ## Reproduce the storage tests
 
