@@ -17,6 +17,7 @@ Each run submitted 30 standalone emails at normal priority in three conditions. 
 The first email entered with 1,451 to 1,457 SMS outstanding. Across all four runs, each of 7,080 API IDs had one provider POST and one persisted acceptance. The observed peak was 87 POSTs for one channel in a rolling second. SMS burst throughput fell by 5.6% and 5.5% in the two comparisons.
 
 ```sh
+git fetch origin refs/pull/13/head:refs/remotes/origin/pr-13
 python3 -B scripts/single-channel-isolation.py --revision 4ca75cc --out .local/results/single-baseline.json
 python3 -B scripts/single-channel-isolation.py --revision 24e727d --out .local/results/single-candidate.json
 ```
@@ -25,7 +26,9 @@ python3 -B scripts/single-channel-isolation.py --revision 24e727d --out .local/r
 
 On November 21, 2026 the implementation at `a97d430` ran for 15 minutes with three worker replicas. The synthetic provider received exactly one POST for each of 108,000 notification IDs. Each channel received 36,000. Per channel, 35,640 were accepted, 180 were deliberately rejected and 180 had deliberately lost acknowledgements. The API recorded the expected outcome for every ID. Accepted p95 was 297.4 ms for email, 297.2 ms for push and 297.6 ms for SMS. Reproduce with `make sustained-mixed`.
 
-In a separate 10,000-SMS burst, the API's create-response p95 was 203 ms. Notification p95 from creation to a persisted outcome was 120.0 seconds. All 10,000 IDs reached acceptance and the provider saw each ID once. The peak was 90 SMS attempts in a rolling second. Reproduce with `make matrix`.
+The [load generator report](submission/sustained.json) includes the per-ID audit totals, provider counts and latency percentiles. The [channel breakdown](submission/channels.csv) compares the expected and observed outcomes.
+
+In a separate [10,000-SMS burst](submission/burst-10000.json) on the same revision, the API's create-response p95 was 203 ms. Notification p95 from creation to a persisted outcome was 120.0 seconds. All 10,000 IDs reached acceptance and the provider saw each ID once. The peak was 90 SMS attempts in a rolling second. Reproduce with `make matrix`.
 
 ## Other experiments
 
