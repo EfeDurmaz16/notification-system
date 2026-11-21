@@ -24,9 +24,28 @@ Each call considers at most 1,000 audit events for notifications already `accept
 
 For outbox cleanup, pass `-v published_ids="$EVENT_IDS"` with up to 1,000 comma-separated **outbox event UUIDs** from Kafka records observed on this deployment's ready topics. Debezium puts the outbox UUID in the `id` header. The Kafka record key is the notification UUID. Never build this list from PostgreSQL. With an empty list, zero outbox rows qualify. This allows CDC outages to last longer than the retention window without aging out unpublished work. Register the bundled connector configuration before applying cleanup so deletes emit no tombstones. [Debezium event headers and delete handling](https://debezium.io/documentation/reference/stable/transformations/outbox-event-router.html)
 
+### Scheduled audit cleanup
+
+Use the optional Compose file to preview one chunk every minute. Set `RETAIN_DAYS` to the approved audit horizon. The example retains thirty days. In a running Compose deployment:
+
+```sh
+RETAIN_DAYS=30 docker compose -f docker-compose.yml -f deploy/retention.compose.yml up -d retention
+RETAIN_DAYS=30 docker compose -f docker-compose.yml -f deploy/retention.compose.yml logs --tail 20 retention
+```
+
+Use the same two files and add `RETENTION_APPLY=true` to the first command after reviewing the counts and archiving any needed transitions. To stop the job:
+
+```sh
+RETAIN_DAYS=30 docker compose -f docker-compose.yml -f deploy/retention.compose.yml stop retention
+```
+
+The job considers up to 1,000 old transitions per minute. It retains unresolved histories, current notifications, creation responses and idempotency keys. A status-history request after pruning returns the transitions still retained. The scheduled job supplies no Kafka publication evidence, so outbox cleanup uses the separate verified-ID command above. A sustained rate over 1,000 eligible transitions per minute can outgrow this schedule.
+
+To check disk use, run `psql "$DATABASE_URL" -X -f scripts/storage-status.sql`. Record table bytes and retained WAL across successive samples. Outbox growth together with increasing unconfirmed WAL is a reason to check the connector and slot before running cleanup. Estimate remaining time from free disk bytes divided by recent growth in bytes per hour. Provision capacity for the full lookup and idempotency horizon.
+
 ## Metrics over long histories
 
-State counts and acceptance latency buckets are maintained in the same transaction as the notification change. Thirty-two stripes distribute counter updates across rows. A scrape aggregates the bounded totals table, uses a partial index for the last five minutes of outcomes and reads the oldest pending timestamp from the status index. The initial migration performs one full backfill and index build under the migration lock. Schedule the upgrade during a quiet period on a populated database.
+State counts and acceptance latency buckets are maintained in the same transaction as the notification change. Thirty-two stripes distribute counter updates across rows. A scrape aggregates the bounded totals table, uses a partial index for the last five minutes of outcomes and reads the oldest pending timestamp from the status index. The initial migration performs one full backfill and index build under the migration lock. For an upgrade from before migrations 003 and 004, inspect table sizes first. Rehearse the upgrade on a restored copy of the same size and reserve a maintenance window for the measured runtime. Stop admissions and drain workers before applying the schema. PostgreSQL holds the table locks until the startup transaction commits. If the deployment requires a no-downtime upgrade, it needs a separately staged online backfill and concurrent index build before rollout. Fresh installs apply the schema to empty tables.
 
 ## Reproduce the storage tests
 
