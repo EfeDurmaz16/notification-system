@@ -30,6 +30,7 @@ func TestProviderRetryConfiguration(t *testing.T) {
 	for _, tc := range []struct{ key, value string }{
 		{"RETRY_MAX_ATTEMPTS", "0"}, {"RETRY_MAX_ATTEMPTS", "abc"}, {"RETRY_BASE_BACKOFF", "0s"},
 		{"RETRY_BASE_BACKOFF", "61s"}, {"PROVIDER_429_NOT_ACCEPTED", "sometimes"}, {"PROVIDER_ACK_MODE", "any"},
+		{"PROVIDER_403_404_ENDPOINT", "maybe"},
 	} {
 		t.Run(tc.key+"="+tc.value, func(t *testing.T) {
 			t.Setenv(tc.key, tc.value)
@@ -37,6 +38,27 @@ func TestProviderRetryConfiguration(t *testing.T) {
 				t.Fatal("invalid retry configuration accepted")
 			}
 		})
+	}
+}
+
+func TestEndpointAccessScope(t *testing.T) {
+	for _, tc := range []struct {
+		url, override string
+		want          bool
+	}{
+		{"https://webhook.site/token", "", true},
+		{"https://capture.Webhook.Site.:443/test", "", true},
+		{"https://notwebhook.site/send", "", false},
+		{"https://webhook.site.example/send", "", false},
+		{"https://provider.example/send", "true", true},
+		{"https://capture.webhook.site/send", "false", false},
+	} {
+		t.Setenv("PROVIDER_URL", tc.url)
+		t.Setenv("PROVIDER_403_404_ENDPOINT", tc.override)
+		engine, err := providerEngine(nil)
+		if err != nil || engine.EndpointAccessErrors != tc.want {
+			t.Fatalf("url=%s override=%q engine=%+v err=%v", tc.url, tc.override, engine, err)
+		}
 	}
 }
 

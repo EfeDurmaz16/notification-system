@@ -12,6 +12,22 @@ func TestOnlyMatchingAuthoritativeReceiptRepairsExpiredLease(t *testing.T) {
 	s := testStore(t)
 	ctx := t.Context()
 	out := delivery.Outcome{State: "accepted", MessageID: "provider-receipt", Reason: "provider_accepted", HTTPStatus: 202}
+	t.Run("unrelated unknown reason", func(t *testing.T) {
+		id := createOne(t, s, sms())
+		if ok, err := s.Start(ctx, id, 1); err != nil || !ok {
+			t.Fatalf("claim: %v, %v", ok, err)
+		}
+		if err := s.Finish(ctx, id, 1, delivery.Outcome{State: "unknown", Reason: "transport_outcome_unknown"}); err != nil {
+			t.Fatal(err)
+		}
+		if err := s.Finish(ctx, id, 1, out); !errors.Is(err, ErrConflict) {
+			t.Fatalf("replaced another unknown outcome: %v", err)
+		}
+		n, err := s.Get(ctx, id)
+		if err != nil || n.Status != "unknown" || n.LastReason != "transport_outcome_unknown" || n.MessageID != "" {
+			t.Fatalf("unexpected outcome after conflicting receipt: %+v, %v", n, err)
+		}
+	})
 	for _, tc := range []struct {
 		name   string
 		window time.Duration

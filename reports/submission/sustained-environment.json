@@ -1,0 +1,12 @@
+{
+  "image": "sha256:e8c8438a2c95a90e58e6d49f4839d292433767423bdc9d7eebef6da48a26acad",
+  "replicas": 3,
+  "workerConcurrency": 24,
+  "batchSharePercent": 20,
+  "providerLatency": "20ms",
+  "providerIdempotency": false,
+  "offeredPerSecondPerChannel": 40,
+  "plannedSeconds": 900,
+  "sourceRevision": "5b517e665f7958e80358e7aa3b101f79445e513d",
+  "runId": "GXM5ADYYXP6VCSO5WYWHJCA4HH"
+}

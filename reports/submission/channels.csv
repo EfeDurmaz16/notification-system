@@ -1,0 +1,4 @@
+channel,total,accepted,failed,unknown,mismatches,accepted_p95_ms,accepted_p99_ms
+email,36000,35640,180,180,0,506.861,1234.625
+push,36000,35640,180,180,0,494.159,1191.519
+sms,36000,35640,180,180,0,512.088,1216.466

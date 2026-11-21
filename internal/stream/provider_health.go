@@ -54,13 +54,17 @@ func (h *providerHealth) shouldPause(channel string, status int, reason string, 
 	if now.Before(streak.pausedUntil) {
 		return false
 	}
-	// 4xx recipient/content rejections still prove the endpoint is answering.
 	distressed := status >= 500 || status == http.StatusTooManyRequests ||
 		status == http.StatusUnauthorized ||
 		reason == "dial_failed" || reason == "transport_outcome_unknown" || reason == "provider_endpoint_access" ||
 		reason == "malformed_ack" || reason == "missing_ack" || reason == "unexpected_ack_status"
 	if !distressed {
-		delete(h.streaks, channel)
+		// Only an accepted receipt or a definitive recipient/content rejection
+		// clears the streak. Local outcomes and ambiguous HTTP replies are neutral.
+		switch reason {
+		case "provider_accepted", "provider_rejected", "provider_forbidden":
+			delete(h.streaks, channel)
+		}
 		return false
 	}
 	if h.streaks == nil {

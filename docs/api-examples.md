@@ -18,6 +18,30 @@ curl -isS "$API/v1/notifications" -H 'Content-Type: application/json' \
 
 A successful response is HTTP 202 with `id` and `batchId`. Repeat the call with the same key and body after a lost response. Reusing a persisted key for different input produces HTTP 409. Keys share one namespace in this single-tenant assessment service. The `X-Correlation-ID` response header identifies the HTTP request in logs.
 
+## Watch a retry in the local simulator
+
+Use the default Compose provider. Its triggers are prefixes in the notification's `content`. Each run below uses a fresh UUID in both the content and create key, so the simulator treats it as a fresh throttle scenario.
+
+```sh
+key=$(uuidgen)
+id=$(curl -fsS "$API/v1/notifications" -H 'Content-Type: application/json' \
+  -H "Idempotency-Key: $key" \
+  --data "{\"recipient\":\"+12025550147\",\"channel\":\"sms\",\"priority\":\"normal\",\"content\":\"[mock:busy-once] $key\"}" \
+  | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
+curl -fsS "$API/v1/notifications/$id/history"
+```
+
+Repeat the last command after the second provider attempt. The `items` array records transitions in order, including `retry_wait` with `providerHttpStatus: 429` on attempt 1 and `accepted` with `providerHttpStatus: 202` on attempt 2. The current snapshot is available at `GET /v1/notifications/{id}`. History pages contain up to 50 retained changes. If a response contains `nextAfter`, pass its value as `?after=<nextAfter>` to fetch the next page.
+
+| Content prefix | Simulator behavior | Outcome with default settings |
+| --- | --- | --- |
+| `[mock:busy-once]` | Rejects the first matching channel, recipient and content with 429 and `Retry-After: 1` | `retry_wait`, then `accepted` |
+| `[mock:reject]` | Rejects the recipient with 400 | `failed` |
+| `[mock:unknown]` | Accepts the POST and drops the connection before replying | `unknown` |
+| `[mock:gateway-after-accept]` | Accepts the POST, then returns 503 and `Retry-After: 1` | `unknown` |
+| `[mock:empty-ack]` | Accepts the POST and returns an empty 200 | `unknown` |
+| `[mock:malformed-ack]` | Accepts the POST and returns a 202 without the required receipt fields | `unknown` |
+
 ## Submit a partially valid batch
 
 ```sh

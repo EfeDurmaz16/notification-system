@@ -69,10 +69,12 @@ type Engine struct {
 	ThrottleRejects bool
 	// MessageIDReceipt is for destinations that define a JSON messageId in a
 	// successful response as proof of acceptance. The assessment uses a full 202 receipt.
-	MessageIDReceipt  bool
-	IdempotencyWindow time.Duration
-	MaxAttempts       int
-	BaseBackoff       time.Duration
+	MessageIDReceipt bool
+	// EndpointAccessErrors means 403 and 404 can describe the shared endpoint.
+	EndpointAccessErrors bool
+	IdempotencyWindow    time.Duration
+	MaxAttempts          int
+	BaseBackoff          time.Duration
 }
 
 // Send is called after the worker has obtained a shared channel permit.
@@ -267,9 +269,7 @@ func (e *Engine) dispatch(client *http.Client, req *http.Request) result {
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 		return readReceipt(resp, e.MessageIDReceipt)
 	}
-	// Webhook.site permits a capture URL to return a configured error status.
-	// The same status can also signal an expired token or denied endpoint access.
-	if strings.EqualFold(req.URL.Hostname(), "webhook.site") && (resp.StatusCode == http.StatusForbidden || resp.StatusCode == http.StatusNotFound) {
+	if e.EndpointAccessErrors && (resp.StatusCode == http.StatusForbidden || resp.StatusCode == http.StatusNotFound) {
 		return result{state: unknown, reason: "provider_endpoint_access", httpStatus: resp.StatusCode}
 	}
 	switch resp.StatusCode {

@@ -10,7 +10,7 @@ Run the complete suite on an otherwise idle stack. It changes worker replica cou
 
 | Target | Scope and output under RESULTS |
 |---|---|
-| `make ci` | Formatting, vet, pinned golangci-lint, govulncheck, unit and race tests, builds, static and live OpenAPI validation, full Compose integration and WebSocket/HTTP smoke. The combined target saves the transcript as ci.txt. |
+| `make ci` | Formatting, vet, pinned golangci-lint, govulncheck, unit and race tests, builds, static and live OpenAPI validation, Compose integration and WebSocket/HTTP smoke, followed by Kafka quarantine, graceful worker drain and provider receipt recovery. Running it through `make verify-all` saves `ci.txt`. |
 | `make performance` | Five samples per Go microbenchmark, one package at a time, including allocation counts, written to bench.txt. |
 | `make matrix` | Seven experiments, each with a JSON report, also environment.txt and summary.md in matrix/. One- and three-replica bursts, sustained load, increasing load, failures, 10,000 notifications and a mixed-channel run. |
 | `make recovery` | PostgreSQL-backed accepted work during worker, Kafka, Debezium, Redis and provider interruptions. Saves recovery.json. |
@@ -24,6 +24,13 @@ Run the complete suite on an otherwise idle stack. It changes worker replica cou
 The [ingress share experiment](https://github.com/EfeDurmaz16/notification-system/blob/4ca75cc9c4dca3265da3888553d880be324e7059/reports/ingress-share/README.md) compares standalone and batch traffic at the same priority. It measures queue latency, provider acceptance, and the batch share of send claims during intervals when both lanes have waiting work.
 
 Run `make channel-isolation` for the separate [channel admission experiment](https://github.com/EfeDurmaz16/notification-system/blob/4ca75cc9c4dca3265da3888553d880be324e7059/reports/channel-isolation/README.md). It builds two worker images from the pinned baseline, applies the experimental patch to one of them, and compares push latency and SMS throughput. Output goes to `$(RESULTS)/channel-isolation`. This historical experiment isolates a change made after records are fetched. The [release channel-reader comparison](https://github.com/EfeDurmaz16/notification-system/blob/4ca75cc9c4dca3265da3888553d880be324e7059/reports/channel-readers/README.md) measures separate channel topics before fetch.
+
+For the [standalone SMS and email comparison](../reports/README.md#standalone-channel-isolation), the measured candidate `24e727d` belongs to the original commits in squash-merged PR #13. From a full clone, fetch the GitHub pull request ref to obtain that commit even after the working branch is deleted. This leaves your checkout in place. Then run the two commands in the comparison.
+
+```sh
+git fetch origin refs/pull/13/head
+git merge-base --is-ancestor 24e727d8486c58462fa2bde7bbcd90f6eb33b740 FETCH_HEAD
+```
 
 Run `make sustained-mixed` separately to exercise all three channels together for 15 minutes on an isolated stack. The workload offers 40 notifications per second per channel, including explicit provider rejections and lost acknowledgements. The [v1.1.0 channel-reader verification report](https://github.com/EfeDurmaz16/notification-system/releases/download/v1.1.0/notification-system-verification-report.md) records the resulting application states, provider observations and five-minute rates. Each invocation writes to its own UTC timestamped directory under `$(RESULTS)/sustained-mixed/`.
 

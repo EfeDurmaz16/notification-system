@@ -13,7 +13,12 @@ info:
     are case-sensitive. Duplicate keys, unpaired Unicode surrogate escapes
     and nesting deeper than 64 levels return HTTP 400. A batch item with an
     ambiguous property reports its zero-based index. Each API replica budgets
-    20 MiB for concurrent create bodies. When full, it returns HTTP 503 with
+    20 MiB for active encoded body buffers. Each upload starts at 4 KiB and
+    grows as bytes arrive. Four simultaneous 5 MiB bodies fit. Copies during
+    growth are serialized and can temporarily use one additional buffer of up
+    to 4 MiB. Each reader also uses a one-byte end-of-body probe. These limits
+    exclude JSON parsing and HTTP transport memory.
+    When capacity is exhausted, the API returns HTTP 503 with
     Retry-After before reserving the idempotency key. Retry with the same key.
 servers:
   - url: /
@@ -54,6 +59,7 @@ paths:
         '413': {$ref: '#/components/responses/TooLarge'}
         '415': {$ref: '#/components/responses/UnsupportedMedia'}
         '422': {$ref: '#/components/responses/InvalidItem'}
+        '503': {$ref: '#/components/responses/CreateUnavailable'}
         default: {$ref: '#/components/responses/Failure'}
     get:
       tags: [Notifications]
@@ -226,6 +232,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Batch'
+        '503': {$ref: '#/components/responses/CreateUnavailable'}
         default: {$ref: '#/components/responses/Failure'}
   /v1/batches/{id}:
     parameters:
@@ -367,6 +374,15 @@ components:
       properties:
         error: {type: string}
   responses:
+    CreateUnavailable:
+      description: Storage is temporarily unavailable or create body capacity is exhausted. Retry with the same idempotency key and body.
+      headers:
+        Retry-After:
+          description: Seconds to wait before retrying when body capacity is exhausted.
+          schema: {type: integer, minimum: 1}
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
     TooLarge:
       description: JSON body exceeds 5 MiB.
       content:

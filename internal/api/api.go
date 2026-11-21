@@ -35,7 +35,10 @@ type Repository interface {
 	Ping(context.Context) error
 }
 
-type server struct{ repo Repository }
+type server struct {
+	repo   Repository
+	bodies *bodyBudget
+}
 
 // New creates a handler without starting a listener or background goroutines.
 func New(repo Repository) http.Handler {
@@ -46,7 +49,7 @@ const DefaultSubscriptionLimit = 32
 
 // NewWithSubscriptionLimit bounds the number of open WebSockets per API process.
 func NewWithSubscriptionLimit(repo Repository, limit int) http.Handler {
-	s := server{repo}
+	s := server{repo: repo, bodies: &bodyBudget{available: 4 * maxBody}}
 	mux := http.NewServeMux()
 	// Bound database work before the HTTP server's write timeout, including
 	// when a client keeps its connection open. WebSockets have separate timers.
@@ -57,9 +60,8 @@ func NewWithSubscriptionLimit(repo Repository, limit int) http.Handler {
 			handler(w, r.WithContext(ctx))
 		})
 	}
-	create := limitCreateBodies(s.create)
-	handle("POST /v1/notifications", create)
-	handle("POST /v1/batches", create)
+	handle("POST /v1/notifications", s.create)
+	handle("POST /v1/batches", s.create)
 	handle("GET /v1/notifications", s.list)
 	handle("GET /v1/notifications/{id}", withID(s.get))
 	handle("GET /v1/notifications/{id}/history", withID(s.history))
@@ -80,7 +82,14 @@ func NewWithSubscriptionLimit(repo Repository, limit int) http.Handler {
 		r = r.WithContext(observability.WithCorrelationID(r.Context(), correlation))
 		response := &accessWriter{ResponseWriter: w, status: http.StatusOK}
 		mux.ServeHTTP(response, r)
-		slog.InfoContext(r.Context(), "http request", "correlation_id", correlation, "trace_id", observability.TraceID(r.Context()), "method", r.Method, "route", r.Pattern, "status", response.status, "duration_ms", time.Since(start).Milliseconds())
+		level := slog.LevelInfo
+		if r.Pattern == "GET /healthz" {
+			level = slog.LevelWarn
+			if response.status == http.StatusOK {
+				level = slog.LevelDebug
+			}
+		}
+		slog.Log(r.Context(), level, "http request", "correlation_id", correlation, "trace_id", observability.TraceID(r.Context()), "method", r.Method, "route", r.Pattern, "status", response.status, "duration_ms", time.Since(start).Milliseconds())
 	})
 }
 
@@ -125,46 +134,43 @@ func repositoryError(w http.ResponseWriter, err error) {
 	case errors.Is(err, store.ErrConflict):
 		problem(w, 409, "request conflicts with existing state")
 	default:
-		slog.Error("repository operation failed", "correlation_id", w.Header().Get("X-Correlation-ID"), "error_type", fmt.Sprintf("%T", err))
+		slog.Error("repository operation failed", "correlation_id", w.Header().Get("X-Correlation-ID"), observability.StorageError(err))
 		problem(w, 503, "storage temporarily unavailable")
 	}
 }
 
 const maxBody = 5 << 20
 
-func readBody(w http.ResponseWriter, r *http.Request) ([]byte, bool) {
+func (body *createBody) readRequest(w http.ResponseWriter, r *http.Request) bool {
 	if ct := r.Header.Get("Content-Type"); ct != "" {
 		mediaType, _, err := mime.ParseMediaType(ct)
 		if err != nil || mediaType != "application/json" {
 			problem(w, 415, "use application/json")
-			return nil, false
+			return false
 		}
 	}
 	if r.ContentLength > maxBody {
 		problem(w, 413, "body exceeds 5 MiB")
-		return nil, false
+		return false
 	}
-	var buf bytes.Buffer
-	if r.ContentLength > 0 {
-		// Leave room for ReadFrom to observe EOF without growing the buffer.
-		buf.Grow(int(r.ContentLength) + bytes.MinRead)
-	}
-	_, err := buf.ReadFrom(http.MaxBytesReader(w, r.Body, maxBody))
+	err := body.read(http.MaxBytesReader(w, r.Body, maxBody))
 	if err != nil {
 		var tooLarge *http.MaxBytesError
-		if errors.As(err, &tooLarge) {
+		if errors.Is(err, errBodyCapacity) {
+			w.Header().Set("Retry-After", "1")
+			problem(w, 503, errBodyCapacity.Error())
+		} else if errors.As(err, &tooLarge) {
 			problem(w, 413, "body exceeds 5 MiB")
 		} else {
 			problem(w, 400, "could not read request")
 		}
-		return nil, false
+		return false
 	}
-	body := buf.Bytes()
-	if !utf8.Valid(body) || !json.Valid(body) {
+	if !utf8.Valid(body.data) || !json.Valid(body.data) {
 		problem(w, 400, "expected one UTF-8 JSON document")
-		return nil, false
+		return false
 	}
-	return body, true
+	return true
 }
 
 func strictJSON(raw []byte, v any) error {
@@ -179,8 +185,9 @@ func (s server) create(w http.ResponseWriter, r *http.Request) {
 		problem(w, 400, "Idempotency-Key must contain 1 to 128 visible ASCII characters")
 		return
 	}
-	body, ok := readBody(w, r)
-	if !ok {
+	body := createBody{budget: s.bodies}
+	defer body.release()
+	if !body.readRequest(w, r) {
 		return
 	}
 	batch := r.URL.Path == "/v1/batches"
@@ -188,7 +195,7 @@ func (s server) create(w http.ResponseWriter, r *http.Request) {
 	if batch {
 		ingress = store.BatchIngress
 	}
-	rawItems, hash, err := requestItems(r.URL.Path, body)
+	rawItems, hash, err := requestItems(r.URL.Path, body.data)
 	if err != nil {
 		problem(w, 400, err.Error())
 		return

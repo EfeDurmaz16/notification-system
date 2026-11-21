@@ -128,7 +128,7 @@ func TestReceiptsAndEndpointEvidence(t *testing.T) {
 				return &http.Response{StatusCode: tc.code, Body: io.NopCloser(strings.NewReader(tc.body))}, nil
 			})}
 			store := new(recordStore)
-			e := Engine{URL: tc.endpoint, Client: client, Store: store, MessageIDReceipt: tc.messageIDReceipt}
+			e := Engine{URL: tc.endpoint, Client: client, Store: store, MessageIDReceipt: tc.messageIDReceipt, EndpointAccessErrors: tc.endpoint == capture}
 			if err := e.Send(t.Context(), initialJob()); err != nil {
 				t.Fatal(err)
 			}

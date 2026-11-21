@@ -20,6 +20,7 @@ import (
 	"github.com/EfeDurmaz16/notification-system/internal/observability"
 	"github.com/EfeDurmaz16/notification-system/internal/store"
 	"github.com/EfeDurmaz16/notification-system/internal/stream"
+	"github.com/redis/go-redis/v9"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -30,6 +31,7 @@ func main() {
 		os.Exit(1)
 	}
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: level})))
+	redis.SetLogger(&redisDiagnostics{logger: slog.Default()})
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	if err := run(ctx, os.Args[1:]); err != nil && !errors.Is(err, context.Canceled) {
@@ -106,14 +108,14 @@ func run(ctx context.Context, args []string) error {
 	group.Go(func() error {
 		tick := time.NewTicker(250 * time.Millisecond)
 		defer tick.Stop()
+		var outage schedulerOutage
 		for {
 			select {
 			case <-workCtx.Done():
 				return workCtx.Err()
 			case <-tick.C:
-				if err := db.TickWithRecovery(workCtx, 2*time.Minute, recoveryWindow, engine.MaxAttempts); err != nil && workCtx.Err() == nil {
-					slog.Error("schedule due work", "error", err)
-				}
+				err := db.TickWithRecovery(workCtx, 2*time.Minute, recoveryWindow, engine.MaxAttempts)
+				outage.observe(workCtx, time.Now(), err, slog.Default())
 			}
 		}
 	})
@@ -173,10 +175,16 @@ func providerEngine(db delivery.Store) (*delivery.Engine, error) {
 	if mode != "assessment" && mode != "message_id" {
 		return nil, errors.New("PROVIDER_ACK_MODE must be assessment or message_id")
 	}
+	host := strings.TrimSuffix(strings.ToLower(u.Hostname()), ".")
+	capture := host == "webhook.site" || strings.HasSuffix(host, ".webhook.site")
+	endpointAccess, err := strconv.ParseBool(env("PROVIDER_403_404_ENDPOINT", strconv.FormatBool(capture)))
+	if err != nil {
+		return nil, errors.New("invalid PROVIDER_403_404_ENDPOINT")
+	}
 	return &delivery.Engine{
 		Store: db, URL: endpoint, Idempotent: idempotent, IdempotencyWindow: window,
 		MaxAttempts: attempts, BaseBackoff: base, ThrottleRejects: throttleRejects,
-		MessageIDReceipt: mode == "message_id",
+		MessageIDReceipt: mode == "message_id", EndpointAccessErrors: endpointAccess,
 	}, nil
 }
 
