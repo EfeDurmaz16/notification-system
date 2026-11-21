@@ -28,7 +28,10 @@ def main(report_path):
 
     def replace(service, image, mode):
         select(image, mode)
-        exp.compose("up", "--no-build", "--no-deps", "-d", "--wait", "--force-recreate", service)
+        # The previous worker predates the readiness endpoint. Its ability to
+        # consume after rollback is checked with a new API notification below.
+        wait = () if service == "worker" and image == baseline else ("--wait",)
+        exp.compose("up", "--no-build", "--no-deps", "-d", *wait, "--force-recreate", service)
 
     def stage(label):
         proof["steps"].append(label)

@@ -210,19 +210,29 @@ func TestExpiredHeadReplaysWithoutSpendingTurn(t *testing.T) {
 	}
 }
 
-func TestChannelReadersShareTheBatchFetchBudget(t *testing.T) {
+func TestChannelReadersSplitEachLaneFetchBudget(t *testing.T) {
 	for p, priority := range priorities {
-		for _, workers := range []int{1, 7, 24, 48} {
-			var total int
-			for i, channel := range channels {
-				r := reader{route{p, bulkLane}, i + 1}
-				if got := r.suffix(); got != priority+".batch."+channel {
-					t.Fatalf("wrong channel topic suffix %q", got)
-				}
-				total += r.window(workers, 20).cap
+		for _, lane := range []ingressLane{bulkLane, singleLane} {
+			laneName, share := "batch", 20
+			if lane == singleLane {
+				laneName, share = "single", 80
 			}
-			if want := max(pollLimit(workers, p), len(channels)); total != want {
-				t.Fatalf("%s with %d workers: aggregate cap %d, want %d", priority, workers, total, want)
+			for _, workers := range []int{1, 7, 24, 48} {
+				var total int
+				for i, channel := range channels {
+					r := reader{route{p, lane}, i + 1}
+					if got := r.suffix(); got != priority+"."+laneName+"."+channel {
+						t.Fatalf("wrong channel topic suffix %q", got)
+					}
+					window := r.window(workers, 20)
+					if window != newWindow(window.cap, share) {
+						t.Fatalf("wrong starting window for %s: %+v", r.suffix(), window)
+					}
+					total += window.cap
+				}
+				if want := max(pollLimit(workers, p), len(channels)); total != want {
+					t.Fatalf("%s with %d workers: aggregate cap %d, want %d", priority, workers, total, want)
+				}
 			}
 		}
 	}
