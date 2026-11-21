@@ -95,6 +95,9 @@ func run(ctx context.Context, args []string) error {
 		recoveryWindow = engine.IdempotencyWindow
 	}
 	group, workCtx := errgroup.WithContext(ctx)
+	group.Go(func() error {
+		return serveWorkerHealth(workCtx, env("WORKER_HEALTH_ADDR", "127.0.0.1:8082"), db.Ping, cfg)
+	})
 	group.Go(func() error { return stream.Run(workCtx, cfg, db, engine) })
 	group.Go(func() error {
 		tick := time.NewTicker(250 * time.Millisecond)
