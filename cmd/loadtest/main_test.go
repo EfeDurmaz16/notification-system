@@ -15,6 +15,18 @@ func TestSummaryNearestRank(t *testing.T) {
 		t.Errorf("%+v", n)
 	}
 }
+
+func TestMixedFaultsAreEvenAcrossChannels(t *testing.T) {
+	for channelIndex := range 3 {
+		counts := make(map[string]int)
+		for i := channelIndex; i < 600; i += 3 {
+			counts[expectedOutcome("mixed-faults", i)]++
+		}
+		if counts["accepted"] != 198 || counts["failed"] != 1 || counts["unknown"] != 1 {
+			t.Fatalf("channel %d: %+v", channelIndex, counts)
+		}
+	}
+}
 func TestMeasureTerminalStates(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("DELETE /stats", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(204) })

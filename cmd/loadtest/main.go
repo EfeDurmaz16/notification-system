@@ -278,21 +278,40 @@ func recipient(channel string, index int) string {
 	}
 }
 
+func mixedChannels(scenario string) bool {
+	return scenario == "mixed" || scenario == "mixed-faults"
+}
+
+// Each channel receives one explicit rejection and one lost acknowledgement
+// per 200 inputs. Spread the two faults across the traffic interval.
+func expectedOutcome(scenario string, index int) string {
+	switch scenario {
+	case "failures":
+		return []string{"accepted", "failed", "unknown"}[index%3]
+	case "mixed-faults":
+		switch index / 3 % 200 {
+		case 49:
+			return "failed"
+		case 149:
+			return "unknown"
+		}
+	}
+	return "accepted"
+}
+
 func (h *harness) create(ctx context.Context, offset, n int, due time.Time, wg *sync.WaitGroup) {
 	rows := make([]notif, n)
 	for i := range rows {
 		idx := offset + i
 		value := fmt.Sprintf("test %s item %d", h.runID, idx)
-		if h.r.Config.Scenario == "failures" {
-			switch idx % 3 {
-			case 1:
-				value = "[mock:reject] " + value
-			case 2:
-				value = "[mock:unknown] " + value
-			}
+		switch expectedOutcome(h.r.Config.Scenario, idx) {
+		case "failed":
+			value = "[mock:reject] " + value
+		case "unknown":
+			value = "[mock:unknown] " + value
 		}
 		channel, priorityIndex := "sms", idx
-		if h.r.Config.Scenario == "mixed" {
+		if mixedChannels(h.r.Config.Scenario) {
 			channel = []string{"sms", "email", "push"}[idx%3]
 			priorityIndex = idx / 3
 		}
@@ -438,14 +457,18 @@ func (h *harness) run(ctx context.Context) error {
 	h.r.Checks["allReachedTerminal"] = h.r.Observed == c.Total
 	h.r.Checks["oneProviderAttemptPerInput"] = h.r.Provider.Attempts == c.Total
 	expectedAccepted := c.Total
-	if c.Scenario == "failures" {
-		expectedAccepted = (c.Total + 2) / 3
-		h.r.Checks["permanentFailuresClassified"] = h.r.Statuses["failed"] == (c.Total+1)/3
-		h.r.Checks["ambiguousResponsesClassified"] = h.r.Statuses["unknown"] == c.Total/3
+	if c.Scenario == "failures" || c.Scenario == "mixed-faults" {
+		expected := map[string]int{}
+		for i := range c.Total {
+			expected[expectedOutcome(c.Scenario, i)]++
+		}
+		expectedAccepted = expected["accepted"]
+		h.r.Checks["permanentFailuresClassified"] = h.r.Statuses["failed"] == expected["failed"]
+		h.r.Checks["ambiguousResponsesClassified"] = h.r.Statuses["unknown"] == expected["unknown"]
 	}
 	h.r.Checks["expectedAcceptedState"] = h.r.Statuses["accepted"] == expectedAccepted
 	expectedChannels := map[string]int{"sms": c.Total}
-	if c.Scenario == "mixed" {
+	if mixedChannels(c.Scenario) {
 		expectedChannels = map[string]int{"sms": (c.Total + 2) / 3, "email": (c.Total + 1) / 3, "push": c.Total / 3}
 	}
 	covered, withinQuota := true, true
@@ -466,7 +489,7 @@ func (h *harness) run(ctx context.Context) error {
 func run() int {
 	var c config
 	var output string
-	flag.StringVar(&c.Scenario, "scenario", "burst", "burst, load, stress, failures, or mixed")
+	flag.StringVar(&c.Scenario, "scenario", "burst", "burst, load, stress, failures, mixed, or mixed-faults")
 	flag.StringVar(&c.API, "api", "http://127.0.0.1:8080", "API URL")
 	flag.StringVar(&c.Provider, "provider", "http://127.0.0.1:8090", "isolated mock provider URL, stats are reset")
 	flag.IntVar(&c.Total, "total", 0, "total notifications")
@@ -485,7 +508,7 @@ func run() int {
 		rate  float64
 	}{
 		"load": {600, 10, 50}, "stress": {1200, 20, 75}, "burst": {1000, 1000, 0},
-		"failures": {30, 10, 20}, "mixed": {3000, 300, 0},
+		"failures": {30, 10, 20}, "mixed": {3000, 300, 0}, "mixed-faults": {3000, 30, 120},
 	}[c.Scenario]
 	if !ok {
 		fmt.Fprintln(os.Stderr, "invalid scenario")

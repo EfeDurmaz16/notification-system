@@ -11,7 +11,7 @@ TEST_DATABASE_URL ?= postgres://notify:notify@127.0.0.1:$(or $(POSTGRES_PORT),54
 RESULTS ?= .local/results
 LOAD_FLAGS ?=
 
-.PHONY: help fmt lint test race build check up down smoke integration ci performance burst load stress mixed failures package openapi contract matrix recovery crash rebalance quarantine drain wave channel-isolation verify-all
+.PHONY: help fmt lint test race build check up down smoke integration ci performance burst load stress mixed failures package openapi contract matrix recovery crash rebalance quarantine drain wave channel-isolation sustained-mixed verify-all
 
 help:
 	@printf '%s\n' 'make check        Format check, vet, unit tests, race detector, binaries' \
@@ -26,6 +26,7 @@ help:
 		'make quarantine   Verify a malformed Kafka record and subsequent delivery' \
 		'make wave         Compare fixed, scheduled and feedback scaling on a traffic wave' \
 		'make channel-isolation  Compare push latency under an SMS backlog on two worker builds' \
+		'make sustained-mixed  Run 15 minutes of simultaneous SMS, email and push traffic' \
 		'make package      Package committed sources and matching native binaries in dist/'
 
 fmt:
@@ -103,6 +104,9 @@ wave:
 
 channel-isolation:
 	bash scripts/run-channel-isolation.sh "$(RESULTS)/channel-isolation"
+
+sustained-mixed:
+	python3 -B scripts/sustained-mixed.py --out "$(RESULTS)/sustained-mixed/$$(date -u +%Y%m%dT%H%M%SZ)"
 
 # Sequence measurements to avoid competing load and failure injections on the same host.
 verify-all:
