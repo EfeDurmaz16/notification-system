@@ -11,7 +11,7 @@ TEST_DATABASE_URL ?= postgres://notify:notify@127.0.0.1:$(or $(POSTGRES_PORT),54
 RESULTS ?= .local/results
 LOAD_FLAGS ?=
 
-.PHONY: help fmt lint test race build check up down smoke integration ci performance burst load stress mixed failures package openapi contract matrix recovery crash verify-all
+.PHONY: help fmt lint test race build check up down smoke integration ci performance burst load stress mixed failures package openapi contract matrix recovery crash rebalance verify-all
 
 help:
 	@printf '%s\n' 'make check        Format check, vet, unit tests, race detector, binaries' \
@@ -21,6 +21,7 @@ help:
 		'make verify-all   Run CI, benchmarks, all traffic and recovery experiments' \
 		'make performance  Benchmark isolated code paths, report time and allocations' \
 		'make burst/load/stress/mixed/failures  Run one experiment on the local stack' \
+		'make rebalance    Kill one of three workers under load and audit every ID' \
 		'make package      Package committed sources and matching native binaries in dist/'
 
 fmt:
@@ -84,6 +85,9 @@ recovery:
 crash:
 	python3 scripts/recovery.py --build --crash --report "$(RESULTS)/crash.json"
 
+rebalance:
+	python3 -B scripts/worker-rebalance.py --out-dir "$(RESULTS)/worker-rebalance"
+
 # Sequence measurements to avoid competing load and failure injections on the same host.
 verify-all:
 	mkdir -p "$(RESULTS)"
@@ -92,6 +96,7 @@ verify-all:
 	$(MAKE) matrix
 	$(MAKE) recovery
 	$(MAKE) crash
+	$(MAKE) rebalance
 
 package:
 	./scripts/package.sh

@@ -7,6 +7,9 @@ The release candidate was exercised with a real PostgreSQL, Kafka, Debezium and 
 | Does a successful cancellation prevent a provider POST? | [Initial red and green tests](tdd/README.md), [PostgreSQL concurrent claims](store/postgres-integration.txt), [live Compose smoke](ci/compose-smoke.txt) |
 | What did we actually observe under load? | [Before/after priority experiment](bench/comparison.md), [release candidate measurements](bench/tuned/summary.md), [per-ID audit on 10,000 messages](bench/tuned/burst-10000.json), [reference measurements before priority tuning](bench/final/summary.md) |
 | How quickly does a standalone SMS pass a campaign at the same priority, and how fast does the batch progress? | [Ingress share measurements and reproduction](ingress-share/README.md) |
+| What happens to individual sends when one worker dies with both queues backlogged? | [Partition ownership, provider POSTs and per-ID status history](worker-rebalance/README.md) |
+| How do the current load, stress and Go benchmarks run? | [Commands, measurements and CI scope](suite-check/README.md) |
+| Can a larger high-priority share bring burst p95 below 64 seconds? | [Priority weight comparison on 10,000 SMS](high-p95/README.md) |
 | How much time did work spend before the send claim versus at the provider? | [SQL stage breakdown](bench/tuned/burst-10000-stages.tsv), [measurement definitions](../docs/persistence.md#stage-latency-after-a-load-run) |
 | What happens if a dependency stops or a worker dies after acceptance? | [Fault sequence and original results](recovery.md), [release candidate rerun](final-recovery/README.md) |
 | Can an independent client safely replay? | [Request-body identity regression](api/checks.md), [later provider rejection after a lost acknowledgment](tdd/README.md) |

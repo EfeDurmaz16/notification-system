@@ -6,7 +6,7 @@ Use a development machine with Go 1.26.4, Docker Engine and Compose v2, Git, Mak
 make verify-all RESULTS=.local/review
 ```
 
-Allow approximately 10 to 20 minutes with warm caches on a developer machine, plus image pull and compilation time on a cold host. Runtime varies with machine capacity. Run the complete suite on an otherwise idle stack. It deliberately changes worker replica counts, generates test notifications and resets the mock provider's counters. Existing development data persists in the main stack. Each fault experiment creates a disposable, independently named stack with dedicated volumes and ports. The suite exits at the first failing stage.
+Run the complete suite on an otherwise idle stack. It changes worker replica counts, generates test notifications and resets the mock provider's counters. Existing development data persists in the main stack. Each fault experiment creates a disposable, independently named stack with dedicated volumes and ports. Both the crash and rebalance cases wait through the two-minute stale-send recovery interval. Runtime also depends on image downloads, compilation and local capacity. The suite exits at the first failing stage.
 
 | Target | Scope and output under RESULTS |
 |---|---|
@@ -15,6 +15,7 @@ Allow approximately 10 to 20 minutes with warm caches on a developer machine, pl
 | `make matrix` | Seven experiments, each with a JSON report, also environment.txt and summary.md in matrix/. One- and three-replica bursts, sustained load, increasing load, failures, 10,000 notifications and a mixed-channel run. |
 | `make recovery` | PostgreSQL-backed accepted work during worker, Kafka, Debezium, Redis and provider interruptions. Saves recovery.json. |
 | `make crash` | Abrupt worker death during a provider attempt. Includes a real two-minute stale-send wait, saves crash.json. |
+| `make rebalance` | Stop one of three workers during concurrent single and batch sends, verify ownership of the Kafka partitions, and reconcile every notification ID with the synthetic provider. Results go to worker-rebalance/. |
 
 The [ingress share experiment](../reports/ingress-share/README.md) compares standalone and batch traffic at the same priority. It measures queue latency, provider acceptance, and the batch share of send claims during intervals when both lanes have waiting work.
 
