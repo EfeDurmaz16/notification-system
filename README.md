@@ -69,6 +69,8 @@ The client create key identifies API intent. The provider key identifies a singl
 
 ## Verification and packaging
 
+In a [15-minute run across all three channels](reports/sustained-mixed/README.md), the API admitted 36,000 notifications per channel. Each channel recorded 35,640 provider acknowledgements, 180 deliberate rejections and 180 lost responses. An independent check found exactly one provider POST for each of the 108,000 IDs. The [restart and recovery tests](reports/final-recovery/README.md) exercise cases where a retry is required.
+
 | Command | Scope |
 |---|---|
 | `make verify-all` | Full local suite including benchmarks, load matrix and isolated fault tests. [Verification guide](docs/verification.md) |
@@ -83,6 +85,8 @@ The client create key identifies API intent. The provider key identifies a singl
 [Verification results and review guide](reports/README.md) include measurements of this implementation, the environment and the exact scope of each run. Run the complete replica and workload comparison with `scripts/bench.sh` against an isolated, idle stack. It temporarily scales workers and resets the local simulator counters. See [failure investigation](docs/operations.md) for manual inspection. The CI workflow runs on GitHub. The release workflow can build a versioned container image and publish packages on a version tag.
 
 ## Observability and operating assumptions
+
+The [historical outcome report](docs/outcome-report.md) groups recorded SMS, email and push outcomes by UTC hour, day or week.
 
 - `/metrics` exposes each channel's average accepted, failed and unknown notifications per second over the last five minutes. It also reports logical pending depth, oldest pending age, state counts, terminal outcome counters and an acceptance latency histogram. `/healthz` checks API database readiness. Worker and connector health are separate from admission readiness.
 - JSON logs link requests and worker outcomes to identifiers. [Distributed tracing](docs/tracing.md) shows the API, worker and provider boundary with W3C propagation and optional OTLP export.
