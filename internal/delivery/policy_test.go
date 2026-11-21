@@ -44,6 +44,8 @@ func TestProviderContract(t *testing.T) {
 		state      string
 	}{
 		{"accepted", 202, `{"messageId":"msg123","status":"accepted","timestamp":"2026-01-01T00:00:00Z"}`, false, accepted},
+		{"unexpected HTTP status with a receipt", 200, `{"messageId":"msg123","status":"accepted","timestamp":"2026-01-01T00:00:00Z"}`, false, unknown},
+		{"format placeholder instead of a date", 202, `{"messageId":"msg123","status":"accepted","timestamp":"ISO8601"}`, false, unknown},
 		{"incomplete ack", 202, `{"messageId":"msg123","status":"accepted"}`, false, unknown},
 		{"malformed ack", 202, "{", false, unknown},
 		{"rejected", 400, "{}", false, failed},

@@ -39,3 +39,23 @@ func TestProviderRetryConfiguration(t *testing.T) {
 		})
 	}
 }
+
+func TestDefaultThrottleContractFollowsDestination(t *testing.T) {
+	for _, tc := range []struct {
+		endpoint, override string
+		want               bool
+	}{
+		{"http://provider:8081/send", "", true},
+		{"https://webhook.site/example", "", false},
+		{"http://provider:8081/another-endpoint", "", false},
+		{"http://provider:8081/send", "false", false},
+		{"https://provider.example/send", "true", true},
+	} {
+		t.Setenv("PROVIDER_URL", tc.endpoint)
+		t.Setenv("PROVIDER_429_NOT_ACCEPTED", tc.override)
+		e, err := providerEngine(nil)
+		if err != nil || e.ThrottleRejects != tc.want {
+			t.Fatalf("endpoint=%s override=%q engine=%+v err=%v", tc.endpoint, tc.override, e, err)
+		}
+	}
+}

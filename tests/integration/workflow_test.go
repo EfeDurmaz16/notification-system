@@ -145,6 +145,18 @@ func TestWorkflow(t *testing.T) {
 		}
 	}
 
+	// The bundled provider records two attempts but rejects the first before acceptance.
+	var throttled createResult
+	body = fmt.Sprintf(`{"recipient":"+12025550111","channel":"sms","priority":"normal","content":"[mock:busy-once] %s"}`, key)
+	call(t, client, "POST", api+"/v1/notifications", key+"-throttle", body, 202, &throttled)
+	receipt := awaitStatus(t, client, api+"/v1/notifications/"+throttled.ID, "accepted")
+	var throttleStats struct{ Attempts int }
+	call(t, client, "GET", provider+"/stats/"+throttled.ID, "", "", 200, &throttleStats)
+	if receipt.MessageID == "" || throttleStats.Attempts != 2 {
+		t.Fatalf("throttled notification: status=%s POSTs=%d", receipt.Status, throttleStats.Attempts)
+	}
+	t.Log("verified bundled provider 429 followed by acceptance on the second POST")
+
 	for _, priority := range []string{"low", "normal", "high"} {
 		t.Run("single_"+priority, func(t *testing.T) {
 			body := fmt.Sprintf(`{"recipient":"+12025550111","channel":"sms","priority":%q,"content":"Standalone integration check"}`, priority)

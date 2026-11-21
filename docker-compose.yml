@@ -153,7 +153,7 @@ services:
       provider: {condition: service_healthy}
     environment:
       <<: *app-env
-      PROVIDER_429_NOT_ACCEPTED: ${PROVIDER_429_NOT_ACCEPTED:-false}
+      PROVIDER_429_NOT_ACCEPTED: ${PROVIDER_429_NOT_ACCEPTED:-}
       RETRY_MAX_ATTEMPTS: ${RETRY_MAX_ATTEMPTS:-6}
       RETRY_BASE_BACKOFF: ${RETRY_BASE_BACKOFF:-2s}
       WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-24}

@@ -137,7 +137,10 @@ func providerEngine(db delivery.Store) (*delivery.Engine, error) {
 	if err != nil || base <= 0 || base > time.Minute {
 		return nil, errors.New("RETRY_BASE_BACKOFF must be positive and at most 1m")
 	}
-	throttleRejects, err := strconv.ParseBool(env("PROVIDER_429_NOT_ACCEPTED", "false"))
+	// The bundled simulator rejects throttled attempts before creating a receipt.
+	// An external URL needs its own explicit guarantee.
+	fixtureRejects := endpoint == "http://provider:8081/send"
+	throttleRejects, err := strconv.ParseBool(env("PROVIDER_429_NOT_ACCEPTED", strconv.FormatBool(fixtureRejects)))
 	if err != nil {
 		return nil, errors.New("invalid PROVIDER_429_NOT_ACCEPTED")
 	}
