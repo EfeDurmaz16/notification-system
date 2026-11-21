@@ -43,7 +43,7 @@ func (s objectShape) acceptsSpelling(key string) bool {
 }
 
 // jsonMembers yields slices into a syntax-checked document. It neither copies
-// array elements nor decodes unused child values. readBody checks json.Valid
+// array elements nor decodes unused child values. readRequest checks json.Valid
 // before this point, so delimiters and escape sequences are well formed.
 func jsonMembers(raw []byte) iter.Seq2[[]byte, []byte] {
 	return func(yield func([]byte, []byte) bool) {
@@ -192,7 +192,7 @@ func appendCanonical(dst, raw []byte, shape objectShape, depth int) ([]byte, err
 
 // json.Valid accepts unpaired surrogate escapes and json.Unmarshal replaces
 // them with U+FFFD. That would collapse distinct request bodies onto one key.
-// readBody has already validated JSON syntax and the request's raw UTF-8.
+// readRequest has already validated JSON syntax and the request's raw UTF-8.
 func validSurrogatePairs(raw []byte) bool {
 	for {
 		i := bytes.IndexByte(raw, '\\')

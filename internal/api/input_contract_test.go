@@ -124,3 +124,42 @@ func TestListFilterContract(t *testing.T) {
 		t.Fatalf("inverted interval: %d", w.Code)
 	}
 }
+
+func TestBatchItemSchemaBoundaries(t *testing.T) {
+	// All lengths below pass the email parser. The API additionally caps the
+	// complete address at 254 bytes, independent of individual label length.
+	longEmail := strings.Repeat("a", 64) + "@" + strings.Repeat("b", 63) + "." + strings.Repeat("c", 63) + "." + strings.Repeat("d", 62)
+	if len(longEmail) != 255 {
+		t.Fatalf("fixture length=%d", len(longEmail))
+	}
+	for _, tc := range []struct{ name, item string }{
+		{"missing priority", strings.Replace(validInput, `,"priority":"normal"`, "", 1)},
+		{"unknown field with valid required fields", strings.Replace(validInput, `"content":"hello"`, `"content":"hello","unexpected":"x"`, 1)},
+		{"255-byte email", strings.Replace(strings.Replace(validInput, `"sms"`, `"email"`, 1), "+905550000111", longEmail, 1)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			repo := new(repositoryStub)
+			w := call(New(repo), "POST", "/v1/batches", `{"notifications":[`+validInput+","+tc.item+`]}`, "boundary")
+			if w.Code != 202 || len(repo.items) != 2 || repo.items[0].Error != "" || repo.items[1].Error == "" {
+				t.Fatalf("HTTP %d, items=%+v", w.Code, repo.items)
+			}
+		})
+	}
+}
+
+func TestPlaceholderNameGrammar(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		valid bool
+	}{
+		{"_a1", true}, {"A", true}, {strings.Repeat("a", 64), true},
+		{"1abc", false}, {"two-words", false}, {"a.b", false}, {strings.Repeat("a", 65), false},
+	} {
+		// Supply values for even invalid names so the missing-variable rule
+		// cannot mask a broken placeholder-name check.
+		got, err := render("{{"+tc.name+"}}", map[string]string{tc.name: "value"}, 160)
+		if (err == nil) != tc.valid || tc.valid && got != "value" {
+			t.Errorf("name %q rendered %q, err=%v", tc.name, got, err)
+		}
+	}
+}

@@ -6,11 +6,12 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
-	"sync"
 	"testing"
+	"testing/iotest"
 	"time"
 
 	"github.com/EfeDurmaz16/notification-system/internal/store"
@@ -101,38 +102,84 @@ func BenchmarkBatchTemplateSubmission(b *testing.B) {
 	}
 }
 
-func TestChunkedCreatesShareCapacityAndReleaseIt(t *testing.T) {
-	entered := make(chan struct{}, 4)
-	release := make(chan struct{})
-	handler := limitCreateBodies(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/v1/batches" {
-			entered <- struct{}{}
-			<-release
+// A reader signals when the handler is waiting for the remainder of a valid
+// upload. The test uses a small shared budget and no sockets or wall-clock sleeps.
+type pausedUpload struct {
+	prefix, rest *strings.Reader
+	waiting      chan struct{}
+	resume       chan struct{}
+}
+
+func (r *pausedUpload) Read(p []byte) (int, error) {
+	if r.prefix.Len() > 0 {
+		return r.prefix.Read(p)
+	}
+	if r.waiting != nil {
+		close(r.waiting)
+		r.waiting = nil
+		<-r.resume
+	}
+	return r.rest.Read(p)
+}
+
+func TestUploadsShareOnlyReceivedBodyMemory(t *testing.T) {
+	for _, length := range []int64{-1, int64(len(validInput))} {
+		waiting := make(chan struct{})
+		upload := &pausedUpload{
+			prefix: strings.NewReader(validInput[:20]), rest: strings.NewReader(validInput[20:]),
+			waiting: waiting, resume: make(chan struct{}),
 		}
-		w.WriteHeader(http.StatusAccepted)
-	})
-	var ongoing sync.WaitGroup
-	for range 4 {
-		ongoing.Go(func() {
-			req := httptest.NewRequest("POST", "/v1/batches", nil)
-			req.ContentLength = -1
-			handler(httptest.NewRecorder(), req)
-		})
+		budget := &bodyBudget{available: 12 << 10}
+		// Only read the body here: the two requests have independent store state.
+		first := createBody{budget: budget}
+		req := httptest.NewRequest("POST", "/v1/notifications", upload)
+		req.ContentLength = length
+		done := make(chan bool, 1)
+		go func() {
+			ok := first.readRequest(httptest.NewRecorder(), req)
+			first.release()
+			done <- ok
+		}()
+		select {
+		case <-waiting:
+		case <-done:
+			t.Fatalf("upload length %d was rejected before reading the prefix", length)
+		case <-time.After(time.Second * 5):
+			t.Fatal("upload did not start")
+		}
+		// The prefix and the read scratch are the only charged buffers,
+		// regardless of transfer framing.
+		availableWhilePaused := budget.available
+		second := createBody{budget: budget}
+		other := httptest.NewRequest("POST", "/v1/notifications", strings.NewReader(validInput))
+		ok := second.readRequest(httptest.NewRecorder(), other)
+		second.release()
+		close(upload.resume)
+		if !<-done || !ok || availableWhilePaused != (12<<10)-(4<<10)-20 || budget.available != 12<<10 {
+			t.Fatalf("length %d: concurrent upload=%t, available during=%d after=%d", length, ok, availableWhilePaused, budget.available)
+		}
 	}
-	for range 4 {
-		<-entered
+}
+
+func TestCreateCapacityErrorReleasesBudgetAndKey(t *testing.T) {
+	repo := new(repositoryStub)
+	budget := &bodyBudget{available: 1 << 13}
+	handler := http.HandlerFunc(server{repo: repo, bodies: budget}.create)
+	if !budget.take(4096 - 1) {
+		t.Fatal("failed to reserve test capacity")
 	}
-	req := httptest.NewRequest("POST", "/v1/notifications", nil)
-	retry := httptest.NewRecorder()
-	handler(retry, req)
-	close(release)
-	ongoing.Wait()
-	if retry.Code != 503 || retry.Header().Get("Retry-After") != "1" {
-		t.Fatalf("create at capacity: %d, %+v", retry.Code, retry.Header())
+	const key = "retry-when-capacity-returns"
+	w := call(handler, "POST", "/v1/notifications", validInput, key)
+	if w.Code != 503 || w.Header().Get("Retry-After") != "1" || repo.hash != nil {
+		t.Fatalf("capacity rejection: HTTP %d, headers %v, key reserved=%t", w.Code, w.Header(), repo.hash != nil)
 	}
-	after := httptest.NewRecorder()
-	handler(after, req)
-	if after.Code != 202 {
-		t.Fatalf("after release: HTTP %d", after.Code)
+	budget.give(4096 - 1)
+	// A failed read must also return its partial buffer and scratch reservation.
+	bad := httptest.NewRequest("POST", "/v1/notifications", io.MultiReader(strings.NewReader("{"), strings.NewReader("}")))
+	bad.Header.Set("Idempotency-Key", "invalid")
+	bad.Body = io.NopCloser(io.MultiReader(bad.Body, iotest.ErrReader(io.ErrUnexpectedEOF)))
+	handler.ServeHTTP(httptest.NewRecorder(), bad)
+	if w := call(handler, "POST", "/v1/notifications", validInput, key); w.Code != 202 || budget.available != 1<<13 {
+		t.Fatalf("after release: HTTP %d, available %d", w.Code, budget.available)
 	}
 }
