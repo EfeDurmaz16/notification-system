@@ -46,7 +46,7 @@ func testDSN(t *testing.T) string {
 
 func testStore(t *testing.T) *Store {
 	t.Helper()
-	s, err := Open(context.Background(), testDSN(t))
+	s, err := Open(context.Background(), testDSN(t), false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -241,7 +241,7 @@ func TestLegacyScheduledNotificationUsesBatchTopic(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	s, err := Open(ctx, dsn)
+	s, err := Open(ctx, dsn, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -390,5 +390,57 @@ func TestAtomicRollbackOnStoreFailure(t *testing.T) {
 	n := 0
 	if err := s.db.QueryRow("SELECT (SELECT count(*) FROM batches)+(SELECT count(*) FROM notifications)+(SELECT count(*) FROM outbox)").Scan(&n); err != nil || n != 0 {
 		t.Fatalf("partial persistence: %d %v", n, err)
+	}
+}
+
+func TestBatchChannelRoutesOnCreateAndPromotion(t *testing.T) {
+	s := testStore(t)
+	s.channelBatch = true
+	ctx := t.Context()
+	entries := []Item{sms(), sms(), sms()}
+	entries[1].Channel, entries[2].Channel = "email", "push"
+	later := time.Now().Add(time.Hour)
+	entries[2].ScheduledAt = &later
+	created, err := s.Create(ctx, uuid(), []byte("channels"), BatchIngress, entries)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.db.Exec("UPDATE notifications SET next_attempt_at=now() WHERE id=$1", created.Items[2].ID); err != nil {
+		t.Fatal(err)
+	}
+	if err = s.Tick(ctx, time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	countEvents := func(id, topic string) int {
+		t.Helper()
+		var n int
+		if err := s.db.QueryRow("SELECT count(*) FROM outbox WHERE aggregateid=$1 AND aggregatetype=$2", id, topic).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+	for i, item := range entries {
+		if countEvents(created.Items[i].ID, "notifications.high.batch."+item.Channel) != 1 {
+			t.Fatalf("wrong batch topic for %s", item.Channel)
+		}
+	}
+	if id := createOne(t, s, sms()); countEvents(id, "notifications.high.single") != 1 {
+		t.Fatal("standalone topic changed")
+	}
+	// Roll writers back after the first attempt. The original record stays on
+	// its channel topic. The due generation is published once on the shared one.
+	id := created.Items[0].ID
+	if started, err := s.Start(ctx, id, 1); err != nil || !started {
+		t.Fatalf("start: %t %v", started, err)
+	}
+	if err := s.Finish(ctx, id, 1, "retry_wait", "", time.Now().Add(-time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	s.channelBatch = false
+	if err := s.Tick(ctx, time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	if countEvents(id, "notifications.high.batch.sms") != 1 || countEvents(id, "notifications.high") != 1 {
+		t.Fatal("retry did not preserve the old event and publish on the active route")
 	}
 }

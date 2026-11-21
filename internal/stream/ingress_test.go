@@ -207,3 +207,38 @@ func TestExpiredHeadReplaysWithoutSpendingTurn(t *testing.T) {
 		t.Fatal("expired task consumed the next bulk turn")
 	}
 }
+
+func TestChannelReadersShareTheBatchFetchBudget(t *testing.T) {
+	for p, priority := range priorities {
+		for _, workers := range []int{1, 7, 24, 48} {
+			var total int
+			for i, channel := range channels {
+				r := reader{route{p, bulkLane}, i + 1}
+				if got := r.suffix(); got != priority+".batch."+channel {
+					t.Fatalf("wrong channel topic suffix %q", got)
+				}
+				total += r.window(workers, 20).cap
+			}
+			if want := max(pollLimit(workers, p), len(channels)); total != want {
+				t.Fatalf("%s with %d workers: aggregate cap %d, want %d", priority, workers, total, want)
+			}
+		}
+	}
+}
+
+func TestChannelReadersKeepIndependentRefillSignals(t *testing.T) {
+	var q priorityQueue
+	now := time.Now()
+	q.enqueue(batch{route: route{1, bulkLane}, source: 1, tasks: []task{{}}, more: true})
+	q.enqueue(batch{route: route{1, bulkLane}, source: 2, tasks: []task{{}}})
+	q.dispatched(bulkLane, 0, now)
+	q.dispatched(bulkLane, 0, now)
+	q.enqueue(batch{route: route{1, bulkLane}, source: 3})
+	if !q.refilling(bulkLane, now) {
+		t.Fatal("an idle channel cleared the backlogged SMS reader's refill grace")
+	}
+	q.enqueue(batch{route: route{1, bulkLane}, source: 1, tasks: []task{{}}})
+	if q.refilling(bulkLane, now) {
+		t.Fatal("SMS refill did not clear its own grace")
+	}
+}

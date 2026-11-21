@@ -54,8 +54,15 @@ func run(ctx context.Context, args []string) error {
 	if dsn == "" {
 		return errors.New("DATABASE_URL must be set")
 	}
+	// Roll out dual-read workers before enabling channel-routed producers.
+	batchRouting := env("BATCH_ROUTING", "shared")
+	switch batchRouting {
+	case "shared", "dual-read", "channel":
+	default:
+		return errors.New("BATCH_ROUTING must be shared, dual-read or channel")
+	}
 	connect, cancel := context.WithTimeout(ctx, 30*time.Second)
-	db, err := store.Open(connect, dsn)
+	db, err := store.Open(connect, dsn, batchRouting == "channel")
 	cancel()
 	if err != nil {
 		return fmt.Errorf("open database: %w", err)
@@ -86,7 +93,7 @@ func run(ctx context.Context, args []string) error {
 		return errors.New("BATCH_SHARE_PERCENT must be between 1 and 49")
 	}
 	brokers := strings.Split(env("KAFKA_BROKERS", "localhost:19092"), ",")
-	cfg := stream.Config{Brokers: brokers, Group: env("KAFKA_GROUP", "notification-delivery"),
+	cfg := stream.Config{ChannelReaders: batchRouting != "shared", Brokers: brokers, Group: env("KAFKA_GROUP", "notification-delivery"),
 		RedisAddr: env("REDIS_ADDR", "localhost:16379"), Workers: workers, BatchSharePercent: batchShare}
 	engine := &delivery.Engine{Store: db, URL: endpoint, Idempotent: idempotent, IdempotencyWindow: window,
 		Client: &http.Client{Timeout: 5 * time.Second}}

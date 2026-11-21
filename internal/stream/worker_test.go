@@ -229,7 +229,7 @@ func TestKafkaRedeliveryAfterFailedBatch(t *testing.T) {
 			defer stop()
 			in := make(chan batch)
 			result := make(chan error, 1)
-			go func() { result <- consumeBatches(pollCtx, consumer, route{}, in, &pollWindow{size: 8, cap: 8}) }()
+			go func() { result <- consumeBatches(pollCtx, consumer, reader{}, in, &pollWindow{size: 8, cap: 8}) }()
 			read := func() []task {
 				t.Helper()
 				select {
