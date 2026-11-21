@@ -24,11 +24,11 @@ python3 -B scripts/single-channel-isolation.py --revision 24e727d --out .local/r
 
 ## Three-channel sustained run
 
-On November 21, 2026 the implementation at `a97d430` ran for 15 minutes with three worker replicas. The synthetic provider received exactly one POST for each of 108,000 notification IDs. Each channel received 36,000. Per channel, 35,640 were accepted, 180 were deliberately rejected and 180 had deliberately lost acknowledgements. The API recorded the expected outcome for every ID. Accepted p95 was 297.4 ms for email, 297.2 ms for push and 297.6 ms for SMS. Reproduce with `make sustained-mixed`.
+The application at [`5b517e6`](https://github.com/EfeDurmaz16/notification-system/commit/5b517e665f7958e80358e7aa3b101f79445e513d) ran for 15 minutes on November 21, 2026 with three workers. Each channel received 36,000 notifications. Per channel, 35,640 were accepted, 180 were deliberately rejected and 180 had deliberately lost acknowledgements. The API recorded the expected outcome for every ID. From creation to recorded acceptance, p95 was 506.9 ms for email, 494.2 ms for push and 512.1 ms for SMS. The provider received one POST for each of the 108,000 IDs. [Run and ID audit](submission/sustained.json) · [Channel breakdown](submission/channels.csv) · [Source revision, image and worker settings](submission/sustained-environment.json)
 
-The [load generator report](submission/sustained.json) includes the per-ID audit totals, provider counts and latency percentiles. The [channel breakdown](submission/channels.csv) compares the expected and observed outcomes.
+A separate three-worker burst on the same application revision admitted 10,000 SMS in ten batches. The API's create-response p95 was 208.9 ms. Notification p95 from creation to a persisted outcome was 126.0 seconds. All 10,000 IDs reached acceptance with one POST each. The observed peak was 91 SMS attempts in a rolling second. [Burst and ID audit](submission/burst-10000.json) · [Source revision, runtime and image](submission/matrix-environment.txt)
 
-In a separate [10,000-SMS burst](submission/burst-10000.json) on the same revision, the API's create-response p95 was 203 ms. Notification p95 from creation to a persisted outcome was 120.0 seconds. All 10,000 IDs reached acceptance and the provider saw each ID once. The peak was 90 SMS attempts in a rolling second. Reproduce with `make matrix`.
+Run `make sustained-mixed` and `make matrix` to repeat the workloads. These local runs overlapped with other isolated test stacks on the same machine. The load was synthetic.
 
 ## Other experiments
 
