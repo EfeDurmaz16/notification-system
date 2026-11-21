@@ -28,7 +28,7 @@ To exercise the **external provider in the assessment**, run `scripts/webhook-sm
 | --- | --- |
 | Which requirements and bonuses are covered? | [Assessment checklist](reports/assessment-requirements.md), [API examples](docs/api-examples.md), [OpenAPI](openapi.yaml) |
 | Why this queue and delivery policy? | [Decisions and state diagram](docs/decisions.md), [measured alternatives and contributions](docs/decision-history.md) |
-| Which results matter under load or after a crash? | [Four measured scenarios, test commands and complete evidence archive](reports/README.md) |
+| Which results matter under load or after a crash? | [Traffic measurements, recovery tests and evidence archive](reports/README.md) |
 
 ## Delivery path
 

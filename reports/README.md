@@ -21,6 +21,12 @@ python3 -B scripts/single-channel-isolation.py --revision 4ca75cc --out .local/r
 python3 -B scripts/single-channel-isolation.py --revision 24e727d --out .local/results/single-candidate.json
 ```
 
+## Three-channel sustained run
+
+On November 21, 2026 the implementation at `a97d430` ran for 15 minutes with three worker replicas. The synthetic provider received exactly one POST for each of 108,000 notification IDs. Each channel received 36,000. Per channel, 35,640 were accepted, 180 were deliberately rejected and 180 had deliberately lost acknowledgements. The API recorded the expected outcome for every ID. Accepted p95 was 297.4 ms for email, 297.2 ms for push and 297.6 ms for SMS. Reproduce with `make sustained-mixed`.
+
+In a separate 10,000-SMS burst, the API's create-response p95 was 203 ms. Notification p95 from creation to a persisted outcome was 120.0 seconds. All 10,000 IDs reached acceptance and the provider saw each ID once. The peak was 90 SMS attempts in a rolling second. Reproduce with `make matrix`.
+
 ## Other experiments
 
 | Question | Recorded observation | Reproduce |
