@@ -1,0 +1,10 @@
+{
+  "image": "sha256:fa06a9febba0ef9d174a298a8ada2e0ca0c430e37db61808277395d8541fb9cb",
+  "replicas": 3,
+  "workerConcurrency": 24,
+  "batchSharePercent": 20,
+  "providerLatency": "20ms",
+  "providerIdempotency": false,
+  "offeredPerSecondPerChannel": 40,
+  "plannedSeconds": 900
+}
