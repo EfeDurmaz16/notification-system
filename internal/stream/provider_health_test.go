@@ -57,6 +57,31 @@ func TestAccessErrorsTripOnlyForEndpointEvidence(t *testing.T) {
 	}
 }
 
+func TestLocalOutcomesPreserveProviderFailureStreak(t *testing.T) {
+	var h providerHealth
+	now := time.Now()
+	for _, step := range []struct {
+		code   int
+		reason string
+		pause  bool
+	}{
+		{503, "provider_outcome_unknown", false},
+		{0, "deadline_before_dispatch", false},
+		{503, "provider_outcome_unknown", false},
+		{0, "idempotency_window_expired", false},
+		{202, "provider_accepted", false},
+		{0, "dial_failed", false},
+		{0, "deadline_before_dispatch", false},
+		{0, "transport_outcome_unknown", false},
+		{0, "deadline_before_dispatch", false},
+		{503, "provider_outcome_unknown", true},
+	} {
+		if got := h.shouldPause("sms", step.code, step.reason, now); got != step.pause {
+			t.Fatalf("status=%d reason=%s pause=%t, want %t", step.code, step.reason, got, step.pause)
+		}
+	}
+}
+
 type trackedOutcomes map[string]delivery.Outcome
 
 func (s trackedOutcomes) Start(_ context.Context, id string, _ int) (bool, error) {
