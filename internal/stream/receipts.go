@@ -74,7 +74,16 @@ func (s receiptStore) reconcile(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	return s.reconcileMembers(ctx, members)
+}
+
+func (s receiptStore) reconcileMembers(ctx context.Context, members []string) error {
+	var deferred error
+	consecutiveFailures := 0
 	for _, data := range members {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		var r receipt
 		err := json.Unmarshal([]byte(data), &r)
 		if err != nil || !validID.MatchString(r.ID) || r.Attempt < 1 || strings.TrimSpace(r.MessageID) == "" || strings.ContainsRune(r.MessageID, 0) || r.Status < 200 || r.Status > 299 {
@@ -96,12 +105,20 @@ func (s receiptStore) reconcile(ctx context.Context) error {
 				slog.WarnContext(ctx, "provider receipt requires inspection", "notification_id", r.ID, "attempt", r.Attempt)
 			}
 		case err != nil:
-			return err
+			// Leave this receipt buffered and try its neighbour. Two failed
+			// database writes in a row stop this sample during an outage.
+			deferred = err
+			consecutiveFailures++
+			if consecutiveFailures >= 2 {
+				return err
+			}
+			continue
 		default:
 			if err := s.client.SRem(ctx, s.key, data).Err(); err != nil {
 				return err
 			}
 		}
+		consecutiveFailures = 0
 	}
-	return nil
+	return deferred
 }
