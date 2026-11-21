@@ -1,1 +1,0 @@
-ok  	github.com/EfeDurmaz16/notification-system/internal/api	0.327s

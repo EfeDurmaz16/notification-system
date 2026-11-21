@@ -16,7 +16,7 @@ trap cleanup EXIT
 
 git -C "$root" archive "$revision" | tar -xf - -C "$source_dir"
 docker build --quiet -t "$base_image" "$source_dir"
-git -C "$source_dir" apply --unidiff-zero "$root/reports/channel-isolation/channel-admission.patch"
+git -C "$source_dir" apply --unidiff-zero "$root/scripts/fixtures/channel-admission.patch"
 docker build --quiet -t "$candidate_image" "$source_dir"
 python3 -B "$root/scripts/channel-isolation.py" \
   --baseline-image "$base_image" --candidate-image "$candidate_image" \
