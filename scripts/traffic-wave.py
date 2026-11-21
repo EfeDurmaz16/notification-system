@@ -14,12 +14,13 @@ import time
 from urllib.request import urlopen
 import uuid
 
-from recovery import Experiment, ROOT, require, wait_until
+from recovery import Experiment, ROOT, batch_source, require, wait_until
 
 RATES = (20, 60, 90, 150, 90, 60, 20)
 SCRIPTED = (1, 2, 2, 3, 3, 2, 1)
 BATCH = 10
 HANDLERS = 24
+BATCH_TOPIC, PARTITION_COUNT = batch_source()
 
 
 def percentile(values, p):
@@ -81,15 +82,25 @@ def metrics(exp):
 
 def kafka_sample(exp):
     result = exp.compose("exec", "-T", "kafka", "/opt/kafka/bin/kafka-consumer-groups.sh",
-                         "--bootstrap-server", "kafka:9092", "--group", "delivery.normal",
+                         "--bootstrap-server", "kafka:9092", "--group", BATCH_TOPIC.replace("notifications.", "delivery.", 1),
                          "--describe", "--offsets", capture=True, check=False)
     partitions = {}
     for line in result.stdout.splitlines():
         fields = line.split()
-        if len(fields) >= 8 and fields[1] == "notifications.normal":
-            partitions[fields[2]] = {"lag": int(fields[5]) if fields[5].isdigit() else None,
+        if len(fields) >= 8 and fields[1] == BATCH_TOPIC:
+            lag = int(fields[5]) if fields[5].isdigit() else None
+            if fields[3:6] == ["-", "0", "-"]:
+                lag = 0
+            partitions[fields[2]] = {"end": int(fields[4]) if fields[4].isdigit() else None,
+                                     "lag": lag,
                                      "owner": fields[7].strip("/")}
-    return {"partitions": partitions, "diagnostic": result.stderr.strip()}
+    return {"topic": BATCH_TOPIC, "partitions": partitions, "diagnostic": result.stderr.strip()}
+
+
+def complete_offsets(sample):
+    parts = sample["partitions"]
+    return (set(parts) == {str(i) for i in range(PARTITION_COUNT)}
+            and all(p["end"] is not None and p["lag"] == 0 for p in parts.values()))
 
 
 def send(exp, token, phase, index, due):
@@ -186,7 +197,7 @@ def replica_seconds(timeline, end_s, initial):
     return round(area + count * (end_s - cursor), 2)
 
 
-def summarize(exp, policy, token, batches, timeline, events, snapshots, seconds, wall_start):
+def summarize(exp, policy, token, batches, timeline, events, snapshots, seconds, wall_start, initial_offsets):
     ids = {item: phase for phase, batch, _, _ in batches for item in batch}
     expected = seconds * sum(RATES)
     require(len(ids) == expected, "duplicate or missing admission IDs")
@@ -221,8 +232,8 @@ def summarize(exp, policy, token, batches, timeline, events, snapshots, seconds,
 
     def drained():
         sample = kafka_sample(exp)
-        partitions = sample["partitions"]
-        if set(partitions) == {"0", "1", "2"} and all(p["lag"] == 0 for p in partitions.values()):
+        first_end = sum(p["end"] for p in initial_offsets["partitions"].values())
+        if complete_offsets(sample) and sum(p["end"] for p in sample["partitions"].values()) == first_end + expected:
             return sample
         return None
 
@@ -241,7 +252,7 @@ def summarize(exp, policy, token, batches, timeline, events, snapshots, seconds,
             "generatorDelayP95Ms": percentile([b[2] for b in batches], .95),
             "generatorDelayMaxMs": round(max(b[2] for b in batches), 3),
             "phases": phase_summary, "scaleActions": events, "timeline": timeline,
-            "kafkaSnapshots": snapshots, "finalKafka": actual_lag}
+            "kafkaSnapshots": snapshots, "initialKafka": initial_offsets, "finalKafka": actual_lag}
 
 
 def trial(exp, policy, seconds):
@@ -254,15 +265,15 @@ def trial(exp, policy, seconds):
     _, warm, _, _ = send(exp, "warm" + token, 0, 0, time.monotonic())
     for item in warm:
         exp.expect(item, "accepted")
-    # The pre-provisioned control must own all three partitions before arrivals begin.
-    initial_assignment = None
-    if policy == "fixed3":
-        def assigned():
-            snapshot = kafka_sample(exp)
-            owners = {p["owner"] for p in snapshot["partitions"].values()} - {"-"}
-            return snapshot if len(owners) == initial else None
+    # The warm batch must have committed before the measured arrivals.
+    def assigned():
+        snapshot = kafka_sample(exp)
+        owners = {p["owner"] for p in snapshot["partitions"].values()} - {"-"}
+        if complete_offsets(snapshot) and len(owners) == min(initial, PARTITION_COUNT):
+            return snapshot
+        return None
 
-        initial_assignment = wait_until(assigned, "all three batch owners active", seconds=120)
+    initial_offsets = wait_until(assigned, "all available batch partitions assigned and warm work committed", seconds=120)
     time.sleep(1.2)
     exp.request("DELETE", exp.provider + "/stats", expected=204)
     cpu_before = worker_cpu(exp) if policy == "fixed3" else None
@@ -296,9 +307,8 @@ def trial(exp, policy, seconds):
             done.set()
             control.result()
             broker.result()
-    result = summarize(exp, policy, token, batches, timeline, events, snapshots, seconds, wall_start)
-    if initial_assignment is not None:
-        result["initialKafka"] = initial_assignment
+    result = summarize(exp, policy, token, batches, timeline, events, snapshots, seconds, wall_start, initial_offsets)
+    if policy == "fixed3":
         result["workerCPU"] = cpu_cost(cpu_before, cpu_after)
     return result
 
@@ -311,9 +321,7 @@ def verify(result):
             "inconsistent or duplicate provider POST, inspect receiptAudit.exceptions")
     # This success-only fixture counts every POST that reached it as one acceptance.
     require(result["provider"]["accepted"] == result["provider"]["attempts"], "provider count mismatch")
-    partitions = result["finalKafka"]["partitions"]
-    require(set(partitions) == {"0", "1", "2"} and all(p["lag"] == 0 for p in partitions.values()),
-            "Kafka offsets did not drain")
+    require(complete_offsets(result["finalKafka"]), "Kafka offsets did not drain")
     if result["policy"] in ("scripted", "feedback"):
         counts = set(sample["replicas"] for sample in result["timeline"])
         require(counts == {1, 2, 3} and result["scaleActions"][-1]["to"] == 1,

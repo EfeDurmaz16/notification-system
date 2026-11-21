@@ -49,6 +49,13 @@ def free_ports(count):
             sock.close()
 
 
+def batch_source(priority="normal", channel="sms"):
+    """Return the expected writer topic and partition count for local experiments."""
+    if (os.getenv("BATCH_ROUTING") or "channel") == "channel":
+        return f"notifications.{priority}.batch.{channel}", 1
+    return f"notifications.{priority}", 3
+
+
 class Experiment:
     def __init__(self):
         self.project = "notify-recovery-" + uuid.uuid4().hex[:10]
