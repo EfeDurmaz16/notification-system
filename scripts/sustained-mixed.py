@@ -119,9 +119,9 @@ def run(directory, minutes):
             csv_file(directory / "timeline.csv", data.pop("timeline"))
             (directory / "load.json").write_text(json.dumps(data, indent=2) + "\n")
             csv_file(directory / "rates.csv", samples)
-            require(load.returncode == 0, "load generator failed; inspect load.json")
         channels = summarize_channels(exp)
         csv_file(directory / "channels.csv", channels)
+        require(load.returncode == 0, "load generator failed; inspect load.json and channels.csv")
         require({row["channel"] for row in channels} == set(CHANNELS), "missing persisted channel")
         require(all(int(row["total"]) == seconds * RATE // 3 and int(row["mismatches"]) == 0
                     for row in channels), "persisted channel totals or individual outcomes differ")

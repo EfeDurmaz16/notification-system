@@ -99,55 +99,37 @@ type result struct {
 }
 
 type receiptAudit struct {
-	Checked    int `json:"checked"`
-	Missing    int `json:"zeroPosts"`
-	Repeated   int `json:"multiplePosts"`
-	ReadErrors int `json:"readErrors"`
+	Checked        int    `json:"checked"`
+	Missing        int    `json:"zeroPosts"`
+	Repeated       int    `json:"multiplePosts"`
+	ReadErrors     int    `json:"readErrors"`
+	FirstReadError string `json:"firstReadError,omitempty"`
 }
 
 // Audit each logical ID only after timings and aggregate counters have been
 // collected. The fixture indexes the actual X-Notification-ID on each POST.
 func (h *harness) audit(ctx context.Context) receiptAudit {
-	type verdict struct {
-		attempts int
-		err      error
-	}
-	ids := make(chan string)
-	observed := make(chan verdict)
-	var workers sync.WaitGroup
-	for range 8 {
-		workers.Add(1)
-		go func() {
-			defer workers.Done()
-			for id := range ids {
-				var r struct {
-					Attempts int `json:"attempts"`
-				}
-				_, err := h.request(ctx, "GET", h.r.Config.Provider+"/stats/"+url.PathEscape(id), nil, "", &r)
-				observed <- verdict{r.Attempts, err}
-			}
-		}()
-	}
-	go func() {
-		defer close(ids)
-		for id := range h.seen {
-			select {
-			case <-ctx.Done():
-				return
-			case ids <- id:
-			}
-		}
-	}()
-	go func() { workers.Wait(); close(observed) }()
+	// One reader keeps one HTTP connection hot. This audit runs after timing
+	// and can revisit over 100,000 IDs on the same local fixture.
 	var audit receiptAudit
-	for v := range observed {
+	for id := range h.seen {
+		if ctx.Err() != nil {
+			break
+		}
+		var row struct {
+			Attempts int `json:"attempts"`
+		}
+		_, err := h.request(ctx, "GET", h.r.Config.Provider+"/stats/"+url.PathEscape(id), nil, "", &row)
 		audit.Checked++
 		switch {
-		case v.err != nil:
+		case err != nil:
 			audit.ReadErrors++
-		case v.attempts == 0:
+			if audit.FirstReadError == "" {
+				audit.FirstReadError = err.Error()
+			}
+		case row.Attempts == 0:
 			audit.Missing++
-		case v.attempts > 1:
+		case row.Attempts > 1:
 			audit.Repeated++
 		}
 	}

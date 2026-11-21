@@ -77,14 +77,18 @@ func BenchmarkPercentiles1000(b *testing.B) {
 func TestPerIDReceiptAuditDetectsOffsettingLossAndDuplication(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /stats/{id}", func(w http.ResponseWriter, r *http.Request) {
+		if r.PathValue("id") == "unreadable" {
+			http.Error(w, "fixture lookup failed", http.StatusServiceUnavailable)
+			return
+		}
 		values := map[string]int{"sent": 1, "missing": 0, "duplicate": 2}
 		_ = json.NewEncoder(w).Encode(map[string]int{"attempts": values[r.PathValue("id")]})
 	})
 	s := httptest.NewServer(mux)
 	defer s.Close()
-	h := harness{r: result{Config: config{Provider: s.URL}}, client: s.Client(), seen: map[string]string{"sent": "accepted", "missing": "accepted", "duplicate": "accepted"}}
+	h := harness{r: result{Config: config{Provider: s.URL}}, client: s.Client(), seen: map[string]string{"sent": "accepted", "missing": "accepted", "duplicate": "accepted", "unreadable": "accepted"}}
 	a := h.audit(t.Context())
-	if a.Checked != 3 || a.Missing != 1 || a.Repeated != 1 || a.ReadErrors != 0 {
+	if a.Checked != 4 || a.Missing != 1 || a.Repeated != 1 || a.ReadErrors != 1 || a.FirstReadError == "" {
 		t.Fatalf("audit: %+v", a)
 	}
 }
