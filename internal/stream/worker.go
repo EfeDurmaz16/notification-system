@@ -419,7 +419,10 @@ func Run(ctx context.Context, cfg Config, store Store, engine *delivery.Engine) 
 	health := providerHealth{limit: limit}
 	sender := *engine
 	sender.ObserveEndpoint = health.observe
+	receipts := receiptStore{Store: engine.Store, client: rdb, key: "notifications:{receipts}"}
+	sender.Store = receipts
 	group, ctx := errgroup.WithContext(ctx)
+	group.Go(func() error { return receipts.recover(ctx) })
 	input := make(chan batch)
 	idle := make(chan chan task)
 	group.Go(func() error {

@@ -50,7 +50,8 @@ type Outcome struct {
 }
 
 // Start compares the pending state and expected attempt before setting sending.
-// Finish must update only the matching sending generation.
+// Finish records the matching generation. A confirmed receipt can repair
+// that same generation after its send lease expired.
 type Store interface {
 	Start(context.Context, string, int) (bool, error)
 	Finish(context.Context, string, int, Outcome) error

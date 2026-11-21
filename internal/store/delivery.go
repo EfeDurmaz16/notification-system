@@ -84,7 +84,9 @@ func (s *Store) finishOnce(ctx context.Context, id string, attempt int, out deli
 	args := []any{id, attempt, out.State, out.MessageID, deadline, out.Reason, out.HTTPStatus}
 	r, err := s.db.ExecContext(ctx, `UPDATE notifications SET status=$3,message_id=$4,next_attempt_at=$5,
         last_reason=$6,provider_http_status=NULLIF($7::integer,0),updated_at=clock_timestamp()
-        WHERE id=$1 AND attempt=$2 AND status='sending'`, args...)
+        WHERE id=$1 AND attempt=$2 AND (status='sending' OR
+            (status IN ('unknown','retry_wait') AND last_reason='send_lease_expired'
+             AND $3='accepted' AND $4<>'' AND $6='provider_accepted' AND $7::integer BETWEEN 200 AND 299))`, args...)
 	if err != nil {
 		return err
 	}
