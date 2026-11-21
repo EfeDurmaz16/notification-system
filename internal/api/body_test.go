@@ -105,8 +105,10 @@ func TestChunkedCreatesShareCapacityAndReleaseIt(t *testing.T) {
 	entered := make(chan struct{}, 4)
 	release := make(chan struct{})
 	handler := limitCreateBodies(func(w http.ResponseWriter, r *http.Request) {
-		entered <- struct{}{}
-		<-release
+		if r.URL.Path == "/v1/batches" {
+			entered <- struct{}{}
+			<-release
+		}
 		w.WriteHeader(http.StatusAccepted)
 	})
 	var ongoing sync.WaitGroup
