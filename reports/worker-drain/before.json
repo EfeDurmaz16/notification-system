@@ -1,0 +1,100 @@
+{
+  "imageId": "sha256:44cecd9463345589b915c7099dd544a6e8e5405d4d48643319b1a784e28db99c",
+  "inFlightId": "3570e339-40fe-4e23-b3c2-2036691a4700",
+  "workerExitCode": 0,
+  "providerLatency": "3s",
+  "workerConcurrency": 1,
+  "composeStopSeconds": 0.34,
+  "provider": {
+    "attempts": 6,
+    "accepted": 6,
+    "deduplicated": 0,
+    "failures": 0,
+    "responseLost": 0,
+    "channels": {
+      "sms": {
+        "attempts": 6,
+        "peakPerSecond": 2
+      }
+    }
+  },
+  "finalOffsets": {
+    "2": {
+      "committed": 1,
+      "end": 1,
+      "lag": 0
+    },
+    "1": {
+      "committed": 3,
+      "end": 3,
+      "lag": 0
+    },
+    "0": {
+      "committed": 2,
+      "end": 2,
+      "lag": 0
+    }
+  },
+  "ids": [
+    {
+      "id": "dcb7dd23-77a0-4bf6-8276-d50182d7291e",
+      "beforeStop": "pending",
+      "atExit": "pending",
+      "postsAtExit": 0,
+      "final": "accepted",
+      "posts": 1,
+      "receiptAtExit": null,
+      "finalReceipt": "8449c108-9e99-4772-ac19-c010d9e5f08c"
+    },
+    {
+      "id": "3570e339-40fe-4e23-b3c2-2036691a4700",
+      "beforeStop": "sending",
+      "atExit": "unknown",
+      "postsAtExit": 1,
+      "final": "unknown",
+      "posts": 1,
+      "receiptAtExit": null,
+      "finalReceipt": null
+    },
+    {
+      "id": "5ca3db19-08fb-4622-97a5-bc4900a6db1f",
+      "beforeStop": "pending",
+      "atExit": "pending",
+      "postsAtExit": 0,
+      "final": "accepted",
+      "posts": 1,
+      "receiptAtExit": null,
+      "finalReceipt": "3adb9c57-ed3e-441e-b66f-3907c20dd946"
+    },
+    {
+      "id": "8919e649-ad21-4af0-87fa-4cfc194f45e2",
+      "beforeStop": "pending",
+      "atExit": "pending",
+      "postsAtExit": 0,
+      "final": "accepted",
+      "posts": 1,
+      "receiptAtExit": null,
+      "finalReceipt": "6a2ffe0f-e393-41cc-a371-812af4de7618"
+    },
+    {
+      "id": "39acd2ac-1693-4d0b-b4c6-08b73a84ab07",
+      "beforeStop": "pending",
+      "atExit": "pending",
+      "postsAtExit": 0,
+      "final": "accepted",
+      "posts": 1,
+      "receiptAtExit": null,
+      "finalReceipt": "0eb20007-0d38-477d-9fe1-5c2fe5dd3a49"
+    },
+    {
+      "id": "a8579f4b-5250-44b2-900c-8e6af81402ca",
+      "beforeStop": "pending",
+      "atExit": "pending",
+      "postsAtExit": 0,
+      "final": "accepted",
+      "posts": 1,
+      "receiptAtExit": null,
+      "finalReceipt": "17193e3a-82e5-4964-9cfb-12913f04b253"
+    }
+  ]
+}

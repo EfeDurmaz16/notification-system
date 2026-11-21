@@ -2,12 +2,66 @@ package delivery
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
 	"testing"
 	"time"
 )
+
+type stopAfterClaim struct {
+	recordStore
+	stop context.CancelFunc
+}
+
+func (s *stopAfterClaim) Start(ctx context.Context, id string, attempt int) (bool, error) {
+	claimed, err := s.recordStore.Start(ctx, id, attempt)
+	s.stop()
+	return claimed, err
+}
+
+type transportFunc func(*http.Request) (*http.Response, error)
+
+func (f transportFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
+func TestShutdownAfterClaimPreservesProviderDeadlineAndReceipt(t *testing.T) {
+	deadline := time.Now().Add(10 * time.Second)
+	ctx, stop := context.WithDeadline(t.Context(), deadline)
+	defer stop()
+	store := &stopAfterClaim{stop: stop}
+	var posts int
+	client := &http.Client{Timeout: time.Minute, Transport: transportFunc(func(r *http.Request) (*http.Response, error) {
+		posts++
+		if err := r.Context().Err(); err != nil {
+			return nil, err
+		}
+		if got, ok := r.Context().Deadline(); !ok || !got.Equal(deadline) {
+			t.Errorf("provider deadline = %v, want %v", got, deadline)
+		}
+		return acceptedTransport{}.RoundTrip(r)
+	})}
+	engine := Engine{Store: store, Client: client, URL: "http://provider.invalid/"}
+	if err := engine.Send(ctx, initialJob()); err != nil {
+		t.Fatal(err)
+	}
+	if !errors.Is(ctx.Err(), context.Canceled) || posts != 1 || store.state != accepted || store.messageID != "m1" {
+		t.Fatalf("worker=%v POSTs=%d status=%q receipt=%q", ctx.Err(), posts, store.state, store.messageID)
+	}
+}
+
+func TestShutdownBeforeClaimLeavesJobPending(t *testing.T) {
+	ctx, stop := context.WithCancel(t.Context())
+	stop()
+	store := new(recordStore)
+	engine := Engine{Store: store, URL: "http://provider.invalid/", Client: &http.Client{Transport: acceptedTransport{}}}
+	if err := engine.Send(ctx, initialJob()); !errors.Is(err, context.Canceled) {
+		t.Fatalf("send error = %v, want cancellation", err)
+	}
+	if store.starts != 0 || store.finishes != 0 {
+		t.Fatalf("new work after shutdown: %+v", store)
+	}
+}
 
 // gateStore models the database's conditional pending -> sending update. Pausing
 // before that update lets the test schedule a successful cancellation first.

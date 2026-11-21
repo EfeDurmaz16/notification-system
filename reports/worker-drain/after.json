@@ -1,0 +1,100 @@
+{
+  "imageId": "sha256:fb8e65f2616c0d8de6616dfbb4e4f53c98d5ad878c61c4d9a62c2c7327275a2e",
+  "inFlightId": "af441d74-c910-4e42-a1c2-b87a1bda46ef",
+  "workerExitCode": 0,
+  "providerLatency": "3s",
+  "workerConcurrency": 1,
+  "composeStopSeconds": 2.983,
+  "provider": {
+    "attempts": 6,
+    "accepted": 6,
+    "deduplicated": 0,
+    "failures": 0,
+    "responseLost": 0,
+    "channels": {
+      "sms": {
+        "attempts": 6,
+        "peakPerSecond": 1
+      }
+    }
+  },
+  "finalOffsets": {
+    "2": {
+      "committed": 4,
+      "end": 4,
+      "lag": 0
+    },
+    "1": {
+      "committed": null,
+      "end": 0,
+      "lag": 0
+    },
+    "0": {
+      "committed": 2,
+      "end": 2,
+      "lag": 0
+    }
+  },
+  "ids": [
+    {
+      "id": "03e48546-f6ce-4d8f-ba74-bc58053aa4bf",
+      "beforeStop": "pending",
+      "atExit": "pending",
+      "postsAtExit": 0,
+      "final": "accepted",
+      "posts": 1,
+      "receiptAtExit": null,
+      "finalReceipt": "ff9d3001-32c6-4111-a6d0-7c0fcf683518"
+    },
+    {
+      "id": "af441d74-c910-4e42-a1c2-b87a1bda46ef",
+      "beforeStop": "sending",
+      "atExit": "accepted",
+      "postsAtExit": 1,
+      "final": "accepted",
+      "posts": 1,
+      "receiptAtExit": "dbe28b58-12e5-44c8-8dae-e013f33f4ed5",
+      "finalReceipt": "dbe28b58-12e5-44c8-8dae-e013f33f4ed5"
+    },
+    {
+      "id": "5a0a2816-1b61-4480-9495-b69623097230",
+      "beforeStop": "pending",
+      "atExit": "pending",
+      "postsAtExit": 0,
+      "final": "accepted",
+      "posts": 1,
+      "receiptAtExit": null,
+      "finalReceipt": "4911b9a8-8b13-4233-bb8e-0bb13cbfbe50"
+    },
+    {
+      "id": "61e06dee-03ca-495a-a664-c076787dafb9",
+      "beforeStop": "pending",
+      "atExit": "pending",
+      "postsAtExit": 0,
+      "final": "accepted",
+      "posts": 1,
+      "receiptAtExit": null,
+      "finalReceipt": "769a80b2-0bf1-4079-95a3-4bc018cc9aa7"
+    },
+    {
+      "id": "40ac354c-8be1-41ba-adcc-a1e7ab3abbaf",
+      "beforeStop": "pending",
+      "atExit": "pending",
+      "postsAtExit": 0,
+      "final": "accepted",
+      "posts": 1,
+      "receiptAtExit": null,
+      "finalReceipt": "a1867bc8-4588-4e1a-950c-fc4d937267ec"
+    },
+    {
+      "id": "2bc79281-330e-4a8e-b6f7-84bca45893cb",
+      "beforeStop": "pending",
+      "atExit": "pending",
+      "postsAtExit": 0,
+      "final": "accepted",
+      "posts": 1,
+      "receiptAtExit": null,
+      "finalReceipt": "aa657f06-ba4c-414c-9053-f318901f1534"
+    }
+  ]
+}

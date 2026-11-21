@@ -272,7 +272,7 @@ func (s *scheduler) next(now time.Time) (chosen route, cursor, credit int, ready
 func (s *scheduler) run(ctx context.Context, in <-chan batch, out chan<- task) {
 	timer := time.NewTimer(time.Hour)
 	defer timer.Stop()
-	for {
+	for ctx.Err() == nil {
 		now := time.Now()
 		var tick <-chan time.Time
 		if wake := s.prepare(now); !wake.IsZero() {
@@ -330,6 +330,11 @@ func Run(ctx context.Context, cfg Config, store Store, sender Sender) error {
 				case <-ctx.Done():
 					return nil
 				case t := <-ready:
+					// Shutdown and a handoff can become ready together. Leave
+					// that unstarted offset for the next group member.
+					if ctx.Err() != nil {
+						return nil
+					}
 					t.result <- outcome{record: t.record, err: process(ctx, store, sender, limit, t.event, t.admitBy)}
 				}
 			}

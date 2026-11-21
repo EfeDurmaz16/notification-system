@@ -16,6 +16,7 @@ Run the complete suite on an otherwise idle stack. It changes worker replica cou
 | `make recovery` | PostgreSQL-backed accepted work during worker, Kafka, Debezium, Redis and provider interruptions. Saves recovery.json. |
 | `make crash` | Abrupt worker death during a provider attempt. Includes a real two-minute stale-send wait, saves crash.json. |
 | `make rebalance` | Stop one of three workers during concurrent single and batch sends, verify ownership of the Kafka partitions, and reconcile every notification ID with the synthetic provider. Results go to worker-rebalance/. |
+| `make drain` | Send SIGTERM to one worker while the provider is delaying its response. Audit queued and in-flight jobs before and after starting a replacement. Local and GitHub CI save worker-drain.json. |
 | `make quarantine` | On a disposable broker, verify the quarantine marker for a malformed record, the committed source offset, and delivery of the following valid notification. Part of local and GitHub CI. Writes quarantine.json. |
 | `make wave` | Compare fixed one- and three-worker controls, a replica schedule, and queue-driven scaling on the same rising and falling SMS traffic. Each 175-second wave is followed by a per-ID provider audit. Writes the reports under traffic-wave/. |
 

@@ -139,6 +139,7 @@ services:
   worker:
     <<: *app
     command: [worker]
+    stop_grace_period: 50s
     depends_on:
       connector-init: {condition: service_completed_successfully}
       redis: {condition: service_healthy}

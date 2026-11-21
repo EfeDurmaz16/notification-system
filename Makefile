@@ -11,7 +11,7 @@ TEST_DATABASE_URL ?= postgres://notify:notify@127.0.0.1:$(or $(POSTGRES_PORT),54
 RESULTS ?= .local/results
 LOAD_FLAGS ?=
 
-.PHONY: help fmt lint test race build check up down smoke integration ci performance burst load stress mixed failures package openapi contract matrix recovery crash rebalance quarantine wave channel-isolation verify-all
+.PHONY: help fmt lint test race build check up down smoke integration ci performance burst load stress mixed failures package openapi contract matrix recovery crash rebalance quarantine drain wave channel-isolation verify-all
 
 help:
 	@printf '%s\n' 'make check        Format check, vet, unit tests, race detector, binaries' \
@@ -22,6 +22,7 @@ help:
 		'make performance  Benchmark isolated code paths, report time and allocations' \
 		'make burst/load/stress/mixed/failures  Run one experiment on the local stack' \
 		'make rebalance    Kill one of three workers under load and audit every ID' \
+		'make drain        Stop a worker during a provider call and audit the replacement' \
 		'make quarantine   Verify a malformed Kafka record and subsequent delivery' \
 		'make wave         Compare fixed, scheduled and feedback scaling on a traffic wave' \
 		'make channel-isolation  Compare push latency under an SMS backlog on two worker builds' \
@@ -68,7 +69,7 @@ integration:
 	TEST_KAFKA_BROKER="$(TEST_KAFKA_BROKER)" TEST_REDIS_ADDR="$(TEST_REDIS_ADDR)" $(GO) test -race -count=1 -v ./internal/stream
 	$(MAKE) smoke contract
 
-ci: check openapi integration quarantine
+ci: check openapi integration quarantine drain
 
 performance:
 	mkdir -p "$(RESULTS)"
@@ -93,6 +94,9 @@ rebalance:
 
 quarantine:
 	python3 -B scripts/quarantine.py --report "$(RESULTS)/quarantine.json"
+
+drain:
+	python3 -B scripts/worker-drain.py --report "$(RESULTS)/worker-drain.json"
 
 wave:
 	python3 -B scripts/traffic-wave.py --out-dir "$(RESULTS)/traffic-wave"

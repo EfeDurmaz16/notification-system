@@ -25,6 +25,12 @@ Redis unavailability prevents new permits. Durable work can keep entering Postgr
 
 Keep an eye on the age of pending work and available disk, especially for extended outages. Admission can eventually fail when PostgreSQL runs out of storage. Compose uses one broker and one database; its interruption tests exercise process recovery on persistent volumes. The suite records the tested conditions and times in [reports](../reports/).
 
+## Stopping a worker
+
+During a normal worker stop, Compose sends SIGTERM and allows 50 seconds before forcing termination. Kafka intake, quota waits and unclaimed work stop. A worker that already acquired the database send claim can receive and save the provider response within the remaining request budget. A partially processed Kafka poll can replay on another worker. The conditional database claim prevents that replay from submitting the same attempt twice.
+
+The service allows up to 30 seconds for the send path (including its five-second provider timeout), five seconds to persist an outcome, two seconds to release a quota reservation and five seconds to flush telemetry. A provider timeout or a forced process exit can still leave an ambiguous outcome. Run `make drain` to exercise normal termination and `make rebalance` to exercise a forced exit.
+
 ## Configuration
 
 All worker replicas in a deployment must use the same database, Kafka cluster, consumer group prefix, Redis instance and provider contract. Changing the group prefix can replay earlier records. Existing DB rows still guard send claims.
