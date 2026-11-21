@@ -20,6 +20,8 @@ The candidate made the product choices below. The coding assistant proposed alte
 
 The candidate identified a missing product distinction: even at the same priority, a standalone notification may be time-sensitive. The candidate chose a standalone lane inside each priority, asked to preserve progress for batches under continuous standalone traffic and ruled out borrowing the normal-priority topic. The assistant compared 10%, 20% and 40% batch weights before choosing the delegated 20% default. The weight applies when both lanes have work visible to the scheduler. An idle lane's capacity is available to the other. [Contention experiments and default](../reports/ingress-share/README.md)
 
+An earlier prototype borrowed the idle normal-priority topic. Compared with the old shared route, standalone latency fell from 109.760 s to 0.583 s and from 116.117 s to 0.163 s in two trials. The candidate kept the independent read path and requested dedicated lanes at the original priority. This preserved the priority contract when normal traffic returned. [Prototype comparison and limitations](https://github.com/EfeDurmaz16/notification-system/blob/c605af9/reports/ingress-probe/README.md)
+
 | Matched comparison during a 10,000-SMS campaign | Time from creation to recorded provider acceptance |
 | --- | ---: |
 | One-item batch, with 9,492 campaign items outstanding at creation | 108.312 s |
