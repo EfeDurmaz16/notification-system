@@ -10,12 +10,16 @@ from pathlib import Path
 import re
 import subprocess
 import time
+import urllib.error
 import uuid
 
-from recovery import Experiment, ROOT, require, wait_until
+from recovery import Experiment, ROOT, batch_source, require, wait_until
 
 COUNT = 400
-TOPICS = ("notifications.normal", "notifications.normal.single")
+BATCH_TOPIC, BATCH_PARTITIONS = batch_source()
+PARTITIONS = {BATCH_TOPIC: BATCH_PARTITIONS, "notifications.normal.single": 3}
+GROUPS = [topic.replace("notifications.", "delivery.", 1) for topic in PARTITIONS]
+GROUP_ARGS = [arg for group in GROUPS for arg in ("--group", group)]
 
 
 def docker(*args):
@@ -30,12 +34,12 @@ def sql(exp, query):
 def assignments(exp):
     args = ["exec", "-T", "kafka", "/opt/kafka/bin/kafka-consumer-groups.sh",
             "--bootstrap-server", "kafka:9092", "--describe", "--members", "--verbose",
-            "--group", "delivery.normal", "--group", "delivery.normal.single"]
+            *GROUP_ARGS]
     output = exp.compose(*args, capture=True).stdout
-    owners = {topic: {} for topic in TOPICS}
+    owners = {topic: {} for topic in PARTITIONS}
     for row in output.splitlines():
         fields = row.split()
-        if len(fields) < 6 or fields[0] not in ("delivery.normal", "delivery.normal.single"):
+        if len(fields) < 6 or fields[0] not in GROUPS:
             continue
         topic = fields[0].replace("delivery.", "notifications.", 1)
         match = re.fullmatch(re.escape(topic) + r":([0-9,]+)", fields[6]) if len(fields) >= 7 else None
@@ -48,9 +52,14 @@ def assignments(exp):
 def membership(exp, ips):
     def stable():
         owners = assignments(exp)
-        if all(set(p) == {"0", "1", "2"} and set(p.values()) == ips for p in owners.values()):
-            return owners
-        return None
+        for topic, n in PARTITIONS.items():
+            mapping = owners[topic]
+            if set(mapping) != {str(i) for i in range(n)}:
+                return None
+            assigned = set(mapping.values())
+            if not assigned <= ips or len(assigned) != min(len(ips), n):
+                return None
+        return owners
     return wait_until(stable, "partition ownership " + str(sorted(ips)), seconds=180)
 
 
@@ -100,11 +109,11 @@ def ledger_rows(exp, killed_at):
 def offset_snapshot(exp):
     output = exp.compose("exec", "-T", "kafka", "/opt/kafka/bin/kafka-consumer-groups.sh",
                          "--bootstrap-server", "kafka:9092", "--describe", "--offsets",
-                         "--group", "delivery.normal", "--group", "delivery.normal.single", capture=True).stdout
+                         *GROUP_ARGS, capture=True).stdout
     snapshot = {}
     for row in output.splitlines():
         fields = row.split()
-        if len(fields) >= 6 and fields[1] in TOPICS and all(value.isdigit() for value in fields[2:6]):
+        if len(fields) >= 6 and fields[1] in PARTITIONS and all(value.isdigit() for value in fields[2:6]):
             partition, committed, end, lag = map(int, fields[2:6])
             snapshot.setdefault(fields[1], {})[partition] = {"committed": committed, "end": end, "lag": lag}
     return snapshot
@@ -113,9 +122,9 @@ def offset_snapshot(exp):
 def verify_broker_drain(exp):
     def drained():
         snapshot = offset_snapshot(exp)
-        for topic in TOPICS:
+        for topic in PARTITIONS:
             partitions = snapshot.get(topic, {})
-            if set(partitions) != {0, 1, 2} or sum(p["end"] for p in partitions.values()) != COUNT:
+            if set(partitions) != set(range(PARTITIONS[topic])) or sum(p["end"] for p in partitions.values()) != COUNT:
                 return None
             if any(p["lag"] != 0 for p in partitions.values()):
                 return None
@@ -133,11 +142,25 @@ def run(exp, out_dir):
     workers = worker_ips(exp)
     require(len(workers) == 3, "expected three live workers")
     owners = membership(exp, set(workers))
-    victim_ip = sorted(workers)[0]
+    victim_ip = owners[BATCH_TOPIC]["0"]
     victim = workers[victim_ip]
     image = docker("inspect", "--format", "{{.Image}}", victim)
     print("Original assignments established. Admitting both cohorts.", flush=True)
     cohort = seed(exp)
+    # A successful conditional cancellation before a send claim must survive
+    # replay after the owning worker dies. The cancelled record stays in Kafka.
+    cancelled = None
+    if BATCH_PARTITIONS == 1:
+        pending = sql(exp, "SELECT id FROM notifications WHERE ingress='batch' AND status='pending' ORDER BY id DESC").splitlines()
+        for item in pending:
+            try:
+                exp.request("POST", exp.api + "/v1/notifications/" + item + "/cancel", expected=204)
+                cancelled = item
+                break
+            except urllib.error.HTTPError as error:
+                if error.code != 409:
+                    raise
+        require(cancelled, "no pending batch notification could be cancelled")
     def active_lanes():
         counts = state_counts(exp)
         return counts if all(counts.get(lane + "/sending", 0) for lane in ("batch", "single")) else None
@@ -176,7 +199,7 @@ def run(exp, out_dir):
         "revision": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
         "image": image, "providerLatency": exp.env["PROVIDER_LATENCY"], "workerConcurrency": 24,
         "batchSharePercent": 20, "providerIdempotent": False, "singleAdmitted": COUNT, "batchAdmitted": COUNT,
-        "killedWorkerIP": victim_ip, "killedAt": killed_at, "reassignmentObservedAt": reassigned_at,
+        "batchTopic": BATCH_TOPIC, "cancelledId": cancelled, "killedWorkerIP": victim_ip, "killedAt": killed_at, "reassignmentObservedAt": reassigned_at,
         "assignmentBefore": owners, "assignmentAfter": replacement, "preKillSnapshot": before,
         "brokerDrain": broker_drain,
         "atKill": dict(Counter(r["ingress"]+"/"+str(r["at_kill"]) for r in rows)),
@@ -191,8 +214,13 @@ def run(exp, out_dir):
     (out_dir / "result.json").write_text(json.dumps(report, indent=2, sort_keys=True)+"\n")
     require(len(rows) == COUNT*2 and provider["attempts"] == sum(after_posts.values()), "provider reconciliation failed")
     require(provider["accepted"] == provider["attempts"] and provider["failures"] == 0, "unexpected fixture rejection")
-    require(all(r["status"] in ("accepted", "unknown") for r in rows), "unexpected terminal status")
-    require(all(r["transitions"] == "pending>sending>"+r["status"] for r in rows), "unexpected state sequence")
+    require(provider["channels"]["sms"]["peakPerSecond"] <= 100, "provider exceeded rolling SMS quota")
+    for r in rows:
+        if r["id"] == cancelled:
+            require(r["transitions"] == "pending>cancelled" and r["provider_posts"] == 0, "cancelled ID reached provider")
+        else:
+            require(r["status"] in ("accepted", "unknown") and r["transitions"] == "pending>sending>"+r["status"],
+                    "unexpected terminal state history")
     require(min(report["atKill"].get(lane + "/pending", 0) for lane in ("batch","single")) >= 50, "lost backlog before kill")
     require(unknown and all(r["at_kill"] == "sending" and not r["message_id"] for r in unknown), "unexpected unknown state history")
     require(not report["multiplePostIds"], "duplicate POST detected; see result.json")
@@ -207,9 +235,10 @@ if __name__ == "__main__":
     args = parser.parse_args()
     args.out_dir.mkdir(parents=True, exist_ok=True)
     exp = Experiment()
-    exp.env.update(APP_IMAGE="notification-system:rebalance-audit", WORKER_CONCURRENCY="24",
+    exp.env.update(APP_IMAGE="notification-system:" + exp.project, WORKER_CONCURRENCY="24",
                    PROVIDER_LATENCY="1s", BATCH_SHARE_PERCENT="20")
     try:
         run(exp, args.out_dir)
     finally:
         exp.compose("down", "--volumes", "--remove-orphans")
+        subprocess.run(["docker", "image", "rm", exp.env["APP_IMAGE"]], check=False)

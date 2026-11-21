@@ -29,7 +29,7 @@ go build -o "$run_dir/loadtest" ./cmd/loadtest
   docker compose version
   git rev-parse HEAD
   docker compose ps --format 'table {{.Service}}\t{{.Image}}\t{{.Status}}'
-  docker image inspect notification-system:local --format 'Application image: {{.Id}}'
+  docker image inspect "${APP_IMAGE:-notification-system:local}" --format 'Application image: {{.Id}}'
 } > "$results/environment.txt"
 exit_code=0
 run_test() {

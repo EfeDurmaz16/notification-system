@@ -69,6 +69,7 @@ integration:
 	TEST_DATABASE_URL="$(TEST_DATABASE_URL)" $(GO) test -race -count=1 -v ./internal/store
 	TEST_KAFKA_BROKER="$(TEST_KAFKA_BROKER)" TEST_REDIS_ADDR="$(TEST_REDIS_ADDR)" $(GO) test -race -count=1 -v ./internal/stream
 	$(MAKE) smoke contract
+	python3 scripts/check-outcome-report.py
 
 ci: check openapi integration quarantine drain
 

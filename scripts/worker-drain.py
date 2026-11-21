@@ -8,10 +8,10 @@ import subprocess
 import time
 import uuid
 
-from recovery import Experiment, require, wait_until
+from recovery import Experiment, batch_source, require, wait_until
 
 
-TOPIC = "notifications.normal"
+TOPIC, PARTITIONS = batch_source()
 COUNT = 6
 
 
@@ -23,11 +23,11 @@ def kafka(exp, command, *args):
 def backlog_published(exp):
     lines = kafka(exp, "get-offsets", "--topic", TOPIC, "--time", "latest").splitlines()
     offsets = {int(p): int(end) for topic, p, end in (line.split(":") for line in lines) if topic == TOPIC}
-    return set(offsets) == {0, 1, 2} and sum(offsets.values()) == COUNT
+    return set(offsets) == set(range(PARTITIONS)) and sum(offsets.values()) == COUNT
 
 
 def drained_offsets(exp):
-    output = kafka(exp, "consumer-groups", "--describe", "--offsets", "--group", "delivery.normal")
+    output = kafka(exp, "consumer-groups", "--describe", "--offsets", "--group", TOPIC.replace("notifications.", "delivery.", 1))
     offsets = {}
     for row in output.splitlines():
         f = row.split()
@@ -36,7 +36,7 @@ def drained_offsets(exp):
             offsets[partition] = {"committed": committed, "end": end, "lag": lag}
         elif len(f) >= 6 and f[1] == TOPIC and f[3:6] == ["-", "0", "-"]:
             offsets[int(f[2])] = {"committed": None, "end": 0, "lag": 0}
-    if len(offsets) == 3 and sum(p["end"] for p in offsets.values()) == COUNT and all(
+    if len(offsets) == PARTITIONS and sum(p["end"] for p in offsets.values()) == COUNT and all(
             p["lag"] == 0 for p in offsets.values()):
         return offsets
 
@@ -92,7 +92,7 @@ def run(exp, build):
                        "receiptAtExit": stopped[item].get("messageId"), "finalReceipt": final.get("messageId")})
     return {"imageId": image, "inFlightId": first, "workerExitCode": exit_code,
             "providerLatency": exp.env["PROVIDER_LATENCY"], "workerConcurrency": 1,
-            "composeStopSeconds": elapsed, "provider": exp.stats(), "finalOffsets": offsets, "ids": ledger}
+            "sourceTopic": TOPIC, "composeStopSeconds": elapsed, "provider": exp.stats(), "finalOffsets": offsets, "ids": ledger}
 
 
 def verify(report):

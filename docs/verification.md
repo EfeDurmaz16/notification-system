@@ -22,7 +22,7 @@ Run the complete suite on an otherwise idle stack. It changes worker replica cou
 
 The [ingress share experiment](../reports/ingress-share/README.md) compares standalone and batch traffic at the same priority. It measures queue latency, provider acceptance, and the batch share of send claims during intervals when both lanes have waiting work.
 
-Run `make channel-isolation` for the separate [channel admission experiment](../reports/channel-isolation/README.md). It builds two worker images from the pinned baseline, applies the experimental patch to one of them, and compares push latency and SMS throughput. Output goes to `$(RESULTS)/channel-isolation`. The default service build uses the original worker.
+Run `make channel-isolation` for the separate [channel admission experiment](../reports/channel-isolation/README.md). It builds two worker images from the pinned baseline, applies the experimental patch to one of them, and compares push latency and SMS throughput. Output goes to `$(RESULTS)/channel-isolation`. This historical experiment isolates a change made after records are fetched. The [release channel-reader comparison](../reports/channel-readers/README.md) measures separate channel topics before fetch.
 
 Run `make sustained-mixed` separately to exercise all three channels together for 15 minutes on an isolated stack. The workload offers 40 notifications per second per channel, including explicit provider rejections and lost acknowledgements. The [run report](../reports/sustained-mixed/README.md) records the resulting application states, provider observations and five-minute rates. Each invocation writes to its own UTC timestamped directory under `$(RESULTS)/sustained-mixed/`.
 
