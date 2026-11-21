@@ -40,7 +40,7 @@ func Open(ctx context.Context, dsn string, channelBatch bool) (*Store, error) {
 	db.SetConnMaxLifetime(30 * time.Minute)
 	s := &Store{db: db, channelBatch: channelBatch}
 	if err := s.migrate(ctx); err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, fmt.Errorf("migrate: %w", err)
 	}
 	return s, nil
@@ -53,7 +53,7 @@ func (s *Store) migrate(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	// Serialize startup across API and worker processes, including the first DDL.
 	if _, err = tx.ExecContext(ctx, "SELECT pg_advisory_xact_lock(408711735)"); err != nil {
 		return err
@@ -161,7 +161,7 @@ func (s *Store) Create(ctx context.Context, key string, hash []byte, ingress Ing
 	if err != nil {
 		return BatchResult{}, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	// An INSERT conflicting with an uncommitted create waits for that transaction.
 	// Under READ COMMITTED, the subsequent SELECT sees the winner's final response.
 	inserted, err := tx.ExecContext(ctx, `INSERT INTO batches(id,idempotency_key,request_hash,response)
@@ -193,13 +193,13 @@ func (s *Store) Create(ctx context.Context, key string, hash []byte, ingress Ing
 	}
 	if len(ready) > 0 {
 		_, err = tx.ExecContext(ctx, `WITH added AS (
-            INSERT INTO notifications(id,batch_id,item_index,recipient,channel,content,priority,status,attempt,scheduled_at,next_attempt_at,traceparent,ingress)
+            INSERT INTO notifications(id,batch_id,item_index,recipient,channel,content,priority,status,attempt,scheduled_at,next_attempt_at,traceparent,ingress,correlation_id)
             SELECT x."ID",$1,x."Index",x."Recipient",x."Channel",x."Content",x."Priority",x."Status",1,x."Scheduled",
-                CASE WHEN x."Status"='scheduled' THEN x."Scheduled" END,$3,$4
+                CASE WHEN x."Status"='scheduled' THEN x."Scheduled" END,$3,$4,$6
             FROM jsonb_to_recordset($2::jsonb) AS x("ID" uuid,"Index" int,"Recipient" text,"Channel" text,"Content" text,
                 "Priority" text,"Status" text,"Scheduled" timestamptz)
             RETURNING id,priority,ingress,status,attempt,traceparent,channel,$5::boolean AS channel_batch)
-            `+emitReady, res.BatchID, data, observability.Traceparent(ctx), ingress, s.channelBatch)
+            `+emitReady, res.BatchID, data, observability.Traceparent(ctx), ingress, s.channelBatch, observability.CorrelationID(ctx))
 		if err != nil {
 			return BatchResult{}, err
 		}

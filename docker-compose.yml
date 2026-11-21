@@ -7,6 +7,7 @@ x-app: &app
     DATABASE_URL: postgres://notify:notify@postgres:5432/notify?sslmode=disable
     KAFKA_BROKERS: kafka:9092
     REDIS_ADDR: redis:6379
+    LOG_LEVEL: ${LOG_LEVEL:-INFO}
     KAFKA_GROUP: delivery
     BATCH_ROUTING: ${BATCH_ROUTING:-channel}
     PROVIDER_URL: ${PROVIDER_URL:-http://provider:8081/send}
@@ -152,6 +153,9 @@ services:
       provider: {condition: service_healthy}
     environment:
       <<: *app-env
+      PROVIDER_429_NOT_ACCEPTED: ${PROVIDER_429_NOT_ACCEPTED:-false}
+      RETRY_MAX_ATTEMPTS: ${RETRY_MAX_ATTEMPTS:-6}
+      RETRY_BASE_BACKOFF: ${RETRY_BASE_BACKOFF:-2s}
       WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-24}
       BATCH_SHARE_PERCENT: ${BATCH_SHARE_PERCENT:-20}
 

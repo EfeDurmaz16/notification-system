@@ -97,8 +97,8 @@ class Experiment:
     def get_state(self, item):
         return self.request("GET", self.api + "/v1/notifications/" + item)["status"]
 
-    def expect(self, item, state):
-        wait_until(lambda: self.get_state(item) == state, f"notification {item} to reach {state}")
+    def expect(self, item, state, seconds=90):
+        wait_until(lambda: self.get_state(item) == state, f"notification {item} to reach {state}", seconds)
 
     def check_outage(self, service):
         before = self.stats()["attempts"]
@@ -135,11 +135,19 @@ class Experiment:
     def provider_outage(self):
         self.compose("stop", "provider")
         exhaust = self.create("transient connection failure exhausts retry budget")
-        self.expect(exhaust, "failed")
+        started = time.monotonic()
+        # Six refused dials can include multiple 30s endpoint cooldowns.
+        self.expect(exhaust, "failed", seconds=180)
+        exhaustion_seconds = round(time.monotonic() - started, 3)
         exhausted = self.request("GET", self.api + "/v1/notifications/" + exhaust)
         require(exhausted["attempt"] > 1, "dial failure did not retry")
         recover = self.create("provider recovers before retry budget expires")
+        admitted = time.monotonic()
+        restore_at = admitted + 30
         self.expect(recover, "retry_wait")
+        # Keep the provider unavailable for thirty seconds after admission.
+        time.sleep(max(0, restore_at - time.monotonic()))
+        outage_seconds = round(time.monotonic() - admitted, 3)
         self.compose("start", "provider")
         self.expect(recover, "accepted")
         recovered = self.request("GET", self.api + "/v1/notifications/" + recover)
@@ -147,6 +155,7 @@ class Experiment:
         require(self.stats()["attempts"] == 1, "unexpected provider POST count after restart")
         return {"exhaustedStatus": "failed", "exhaustedAttempts": exhausted["attempt"],
                 "recoveredStatus": "accepted", "recoveredAttempts": recovered["attempt"],
+                "outageAfterAdmissionSeconds": outage_seconds, "exhaustionSeconds": exhaustion_seconds,
                 "providerPOSTsAfterRestart": 1}
 
     def outcomes(self):
