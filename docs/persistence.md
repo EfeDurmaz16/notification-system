@@ -20,7 +20,7 @@ An operator can prune old audit transitions and already-published outbox events 
 psql "$DATABASE_URL" -X -v before='2026-01-01T00:00:00Z' -f scripts/retention.sql
 ```
 
-Each call considers at most 1,000 audit events for notifications already `accepted`, `failed` or `cancelled` before the cutoff. Unresolved `unknown` notifications retain their full history. Historical outcome reports and live status use the notification rows, while attempt-by-attempt forensic and stage-latency queries lose the pruned history.
+Each call scans up to 1,000 audit events older than the cutoff, in `(changed_at, seq)` order. Only events whose notification was already `accepted`, `failed` or `cancelled` before the cutoff qualify for deletion. A page of 1,000 protected events therefore advances the scan by 1,000 and deletes zero. Unresolved `unknown` notifications retain their full history. Historical outcome reports and live status use the notification rows, while attempt-by-attempt forensic and stage-latency queries lose the pruned history.
 
 For outbox cleanup, pass `-v published_ids="$EVENT_IDS"` with up to 1,000 comma-separated **outbox event UUIDs** from Kafka records observed on this deployment's ready topics. Debezium puts the outbox UUID in the `id` header. The Kafka record key is the notification UUID. Never build this list from PostgreSQL. With an empty list, zero outbox rows qualify. This allows CDC outages to last longer than the retention window without aging out unpublished work. Register the bundled connector configuration before applying cleanup so deletes emit no tombstones. [Debezium event headers and delete handling](https://debezium.io/documentation/reference/stable/transformations/outbox-event-router.html)
 
@@ -39,7 +39,11 @@ Use the same two files and add `RETENTION_APPLY=true` to the first command after
 RETAIN_DAYS=30 docker compose -f docker-compose.yml -f deploy/retention.compose.yml stop retention
 ```
 
-The job examines up to 1,000 old transitions per minute using the indexed cursor `(changed_at, seq)`. The cutoff stays fixed during each sweep. After the last page, the next pass starts at the oldest retained event, so histories that have since resolved become eligible. Preview and apply keep separate progress rows. A failed transaction advances neither deletions nor progress. Logs show the number examined and the number eligible. It retains unresolved histories, current notifications, creation responses and idempotency keys. A status-history request after pruning returns the transitions still retained. The scheduled job supplies no Kafka publication evidence, so outbox cleanup uses the separate verified-ID command above. A sustained rate over 1,000 eligible transitions per minute can outgrow this schedule.
+The scheduled job processes one page, then waits 60 seconds. For example, 250,000 protected transitions at the front of a sweep consume 250 full runs before the job reaches an eligible event behind them. Size the schedule against the rate of **all transitions reaching the retention cutoff**. The logs expose both counts as `examined_audit_events` and `eligible_audit_events`.
+
+Manual and scheduled apply runs share a database cursor. Each committed run resumes where the last one stopped. Preview runs advance a separate cursor, so successive previews can show different pages and an apply run can see a different page from the last preview. A failed transaction rolls back both deletions and cursor progress. A sweep holds its cutoff as time moves forward. After a short or empty page the cursor wraps, allowing later sweeps to revisit previously protected histories.
+
+The job preserves current notifications, creation responses and idempotency keys. A status-history request returns the transitions still retained. The scheduled job supplies no Kafka publication evidence, so outbox cleanup uses the separate verified-ID command above.
 
 To check disk use, run `psql "$DATABASE_URL" -X -f scripts/storage-status.sql`. Record table bytes and retained WAL across successive samples. Outbox growth together with increasing unconfirmed WAL is a reason to check the connector and slot before running cleanup. Estimate remaining time from free disk bytes divided by recent growth in bytes per hour. Provision capacity for the full lookup and idempotency horizon.
 
