@@ -97,3 +97,16 @@ The [historical outcome report](docs/outcome-report.md) groups recorded SMS, ema
 - The notification row is authoritative. WebSocket subscribers receive current snapshots, may skip intermediate states, and can refetch the resource after reconnecting.
 - The simulator and single-node PostgreSQL, Kafka and Redis volumes model process restarts on a development host. Production HA, authenticated tenants, retention and provider receipts require deployment-specific configuration. The API uses one trusted client namespace. Keep the default bindings on loopback.
 - Retain outbox rows, notification history, and replay keys for the assessment. Capacity planning must account for these tables and WAL growth during outages. Terminal failed and unknown items remain queryable by status. Malformed stream envelopes are quarantined separately.
+
+## Further improvements
+
+1. **Test recovery with a real provider.** The Webhook.site fixture can show that a POST arrived. For the first production integration, test two cases against the provider's contract: a 429 with a retry delay, and a lost acknowledgement after acceptance. Check the idempotency window and whether the original notification ID can retrieve an authoritative receipt before enabling automatic retries or reconciliation. [Current recovery policy](docs/decision-history.md#what-can-a-replacement-worker-learn-after-a-lost-acknowledgement)
+2. **Reduce the cost of scraping metrics as history grows.** With 2.16 million older notifications and no active writers, a full scrape took 444 ms at the median. The all-time latency histogram scanned historical rows on every scrape. Benchmark precomputed histogram buckets under concurrent sends and verify that counts still match the underlying rows. [Measurements and query plans](reports/volume-simulation/README.md)
+
+### Scenarios worth revisiting
+
+| Scenario | First change to evaluate |
+| --- | --- |
+| The service must run a campaign for 50,000 eligible recipients | The caller currently supplies the recipients, up to 1,000 per request. Add a campaign ID, consent checks and durable progress so an interrupted campaign resumes with the remaining recipients. [Batch contract and burst test](reports/assessment-requirements.md) |
+| Two independent customers use the same create key | Authenticate callers, scope reads and cancellation to the owner, and enforce uniqueness on `(tenant_id, idempotency_key)`. Each customer can then retry their own request safely. |
+| A slow SMS provider ties up workers while push is ready | Independent readers already reduced batch push p95 from 43 s to 187 ms in one matched trial. If delays now occur after the Kafka read, measure slot occupancy and test a per-channel concurrency limit before splitting the pool. [Both matched trials and SMS cost](reports/channel-readers/README.md) |
