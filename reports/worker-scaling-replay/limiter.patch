@@ -1,0 +1,23 @@
+--- a/internal/stream/limiter.go
++++ b/internal/stream/limiter.go
+@@ -21,7 +21,11 @@
+ local now = tonumber(t[1]) * 1000000 + tonumber(t[2])
+ redis.call("ZREMRANGEBYSCORE", KEYS[1], "-inf", now)
+ local available = tonumber(redis.call("GET", KEYS[2]) or "0")
+-if redis.call("ZCARD", KEYS[1]) >= 100 then
++local quota = tonumber(redis.call("GET", "experiment:quota") or "100")
++if not quota or quota < 1 or quota ~= math.floor(quota) then
++  return redis.error_reply("invalid experiment quota")
++end
++if redis.call("ZCARD", KEYS[1]) >= quota then
+   local oldest = redis.call("ZRANGE", KEYS[1], 0, 0, "WITHSCORES")
+   available = math.max(available, tonumber(oldest[2]))
+ end
+@@ -30,6 +34,6 @@
+ end
+ redis.call("ZADD", KEYS[1], now + 120000000, ARGV[1])
+ redis.call("PEXPIRE", KEYS[1], 121000)
+-redis.call("SET", KEYS[2], now + 10000, "PX", 2000)
++redis.call("SET", KEYS[2], now + math.ceil(1000000 / quota), "PX", 2000)
+ return 0
+ `)
