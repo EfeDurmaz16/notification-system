@@ -12,6 +12,16 @@ The experimental quota allowed 10,000 attempts/s. The scaling run averaged 572 p
 
 The worker sent HTTP requests over the Compose network. The [local provider](../cmd/provider/main.go) recorded each successful test SMS, then waited for the configured `PROVIDER_LATENCY=20ms` before returning its receipt. Each request had its own timer. The rate of 572/s includes the queue draining and the client observing completion. For a production target, first measure the actual provider's response times, allowed attempt rate and peak arrival rate by channel. Use target attempts/s × mean HTTP round-trip seconds to estimate the average calls in flight. Increase per-worker concurrency while monitoring database connections and provider throttling. If waiting work outgrows one replica, provision enough partitions for other replicas to share it and scale on queue age. Check high-priority latency and duplicate POSTs during a rebalance before adopting the change.
 
+### Replay the 100,000-SMS comparison
+
+Use `make wave` for the normal rising and falling traffic test at the release quota. To reproduce the partition and high-quota figures above, run the [benchmark fixture](../reports/worker-scaling-replay/) from the repository root. It pins the measured revision, applies a benchmark-only limiter patch to a temporary copy, and uses the local provider with a 20 ms response delay. You need Git history containing that revision, Go, Python 3, Docker Compose, `patch`, and free localhost ports 28820 through 28825.
+
+```sh
+sh reports/worker-scaling-replay/run.sh
+```
+
+The eleven runs compare one fixed worker, three fixed workers and a queue-driven controller. The 100,000-SMS cases use three partitions per priority and a 10,000-attempts/s experimental quota. Budget at least 20 minutes plus setup. Each run records replica changes, latency, throughput and per-ID receipt checks. The script removes its own Compose project, volumes and image at exit. The script prints the temporary results directory on startup. It contains `summary.csv` and the per-run JSON files.
+
 ## Modes
 
 Set `BATCH_ROUTING` on both the API and workers. Workers also publish when promoting scheduled jobs and retries. Existing outbox records retain their original destination. Every mode reads the original shared topics.

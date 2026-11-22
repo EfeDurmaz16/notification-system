@@ -22,6 +22,33 @@ curl -fsS "$api/v1/notifications/<id>"
 
 To exercise the **external provider in the assessment**, run `scripts/webhook-smoke.sh`. It starts an isolated Compose project, configures a disposable Webhook.site endpoint, sends one synthetic email and checks both the persisted receipt and captured POST. [Manual configuration and example acknowledgement](docs/webhook-site.md)
 
+## Choose the provider and response time
+
+By default the worker posts to `http://provider:8081/send`. This local simulator records each accepted request, waits **20 ms per request**, then returns the receipt. Concurrent requests wait in parallel. The worker adds no artificial delay when calling an external endpoint.
+
+| To try | How to run it |
+| --- | --- |
+| Measure the local system with zero simulated wait | On the running demo stack, run `PROVIDER_LATENCY=0ms docker compose up -d --no-deps --wait provider`. Repeat with `20ms` to restore the benchmark default. |
+| Use your own HTTP provider | In a shell on a fresh stack, `export PROVIDER_URL='https://your-provider.example/send'`, then `docker compose up --build -d --wait`. Workers post directly to that URL. Use the single-create example above. |
+
+The default acknowledgement contract expects HTTP 202 with a JSON `messageId`, `status: "accepted"` and an RFC 3339 `timestamp`. An empty 200 leaves the outcome `unknown`. Keep the URL exported when resizing the same stack. Before returning to the simulator, unset `PROVIDER_URL` and run `docker compose up -d --wait`. [Example receipt and other provider contracts](docs/webhook-site.md#configure-a-capture-by-hand)
+
+## Increase and decrease the worker count
+
+On the running Compose stack, change only the delivery service. You can submit notifications before and after each change and follow the same IDs through the API.
+
+```sh
+docker compose up -d --no-deps --scale worker=3 --wait worker
+docker compose ps worker
+docker compose up -d --no-deps --scale worker=1 --wait worker
+```
+
+Each replica defaults to 24 concurrent delivery slots (`WORKER_CONCURRENCY`). All replicas share the same 100 attempts/s per channel. Kafka redistributes partition ownership when membership changes. On a fresh stack, a single channel at one priority has three standalone partitions and one batch partition, so adding replicas need not speed up one busy batch topic.
+
+To try **automatic scaling under load**, run `make wave RESULTS=.local/reviewer` with Docker Compose, Make and Python 3. The experiment uses its own local simulator at 20 ms. It replays the same SMS traffic (20 → 60 → 90 → 150 → 90 → 60 → 20 SMS/s) with one fixed replica, three fixed replicas, a preset replica schedule and a controller that reacts to queue depth and age. The controller runs only during the experiment.
+
+Allow about 12 minutes of traffic plus startup and drain. Compare the four JSON files under `.local/reviewer/traffic-wave/`. Each reports replica changes (`scaleActions`), end-to-end latency (`p95Seconds`), throughput including drain (`acceptedPerSecondThroughWaveAndDrain`) and POST counts by notification ID (`receiptAudit`). For the separate high-quota test, see [Replay the 100,000-SMS comparison](docs/channel-batch-routing.md#replay-the-100000-sms-comparison).
+
 ## Review the implementation
 
 | Question | Where to look |
